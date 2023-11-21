@@ -1,0 +1,8 @@
+*.mp4
+*.avi
+*.onnx
+*.pt
+*.xml
+*.bin
+/datasets
+/best_100b_openvino_model
