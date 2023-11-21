@@ -1,0 +1,13 @@
+path: buff_format
+
+train: images/train
+val: images/val
+test: images/val
+
+kpt_shape: [5, 2]
+
+names:
+  0: RR
+  1: RW
+  2: BR
+  3: BW
