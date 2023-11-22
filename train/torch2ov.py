@@ -4,5 +4,5 @@ from ultralytics import YOLO
 
 model = YOLO('best_100b.pt')
 
-model.export(format="openvino", dynamic=True, half=True)
+model.export(format="openvino", dynamic=False, half=True)
 
