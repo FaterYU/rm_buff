@@ -1,10 +1,16 @@
 #ifndef BUFF_DETECTOR__DETECTOR_NODE_HPP_
 #define BUFF_DETECTOR__DETECTOR_NODE_HPP_
 
+#include <cv_bridge/cv_bridge.h>
+
 #include <ament_index_cpp/get_package_share_directory.hpp>
+#include <buff_interfaces/msg/blade.hpp>
+#include <buff_interfaces/msg/blade_array.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/image.hpp>
-#include <std_msgs/msg/string.hpp>
+#include <std_msgs/msg/float32.hpp>
+#include <std_msgs/msg/float32_multi_array.hpp>
 
 #include "buff_detector/detector.hpp"
 
@@ -16,17 +22,18 @@ class BuffDetectorNode : public rclcpp::Node {
  private:
   void imageCallback(const sensor_msgs::msg::Image::SharedPtr msg);
 
-  rclcpp::TimerBase::SharedPtr timer_;
-  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_;
-  size_t count_;
-  void timer_callback();
+  // Camera info part
+  rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr cam_info_sub_;
+  cv::Point2f cam_center_;
+  std::shared_ptr<sensor_msgs::msg::CameraInfo> cam_info_;
+
+  rclcpp::Publisher<buff_interfaces::msg::BladeArray>::SharedPtr publisher_;
 
   //   Detetor
-  Detector detector_;
+  std::unique_ptr<Detector> detector_;
 
   //   Image Subscrpition
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr img_sub_;
-  cv::Mat img_;
 };
 }  // namespace rm_buff
 

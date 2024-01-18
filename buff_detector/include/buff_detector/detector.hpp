@@ -6,16 +6,33 @@
 #include <string>
 #include <vector>
 
+#include "buff_interfaces/msg/blade.hpp"
+#include "buff_interfaces/msg/blade_array.hpp"
+#include "geometry_msgs/msg/point.hpp"
 #include "openvino/openvino.hpp"
+
+#define NMS_THRESHOLD 0.10f
+#define CONF_THRESHOLD 0.40f
+#define CONF_REMAIN 0.0
+#define IMG_SIZE 640
+#define KPT_NUM 5
+#define CLS_NUM 4
+#define VIDEO
 
 namespace rm_buff {
 class Detector {
  public:
-  explicit Detector();
-  explicit Detector(const std::string model_path);
-  ~Detector();
+  // Detector();
+  Detector(const std::string model_path);
+  // ~Detector();
 
-  std::vector<float> Detect(const cv::Mat& image);
+  buff_interfaces::msg::BladeArray Detect(cv::Mat &image);
+  // struct Blade {
+  //   cv::Rect_<float> rect;
+  //   int label;
+  //   float prob;
+  //   std::vector<cv::Point2f> kpt;
+  // };
 
  private:
   std::string model_path_;
@@ -26,6 +43,14 @@ class Detector {
   ov::CompiledModel compiled_model_;
   ov::InferRequest infer_request_;
   ov::Tensor input_tensor_;
+
+  cv::Mat letterbox(cv::Mat &src, int h, int w);
+
+  buff_interfaces::msg::BladeArray non_max_suppression(ov::Tensor &output,
+                                                       float conf_thres,
+                                                       float iou_thres, int nc);
+
+  const std::vector<std::string> class_names = {"RR", "RW", "BR", "BW"};
 };
 }  // namespace rm_buff
 
