@@ -12,7 +12,7 @@
 #include "openvino/openvino.hpp"
 
 #define NMS_THRESHOLD 0.10f
-#define CONF_THRESHOLD 0.40f
+#define CONF_THRESHOLD 0.70f
 #define CONF_REMAIN 0.0
 #define IMG_SIZE 640
 #define KPT_NUM 5
@@ -27,12 +27,8 @@ class Detector {
   // ~Detector();
 
   buff_interfaces::msg::BladeArray Detect(cv::Mat &image);
-  // struct Blade {
-  //   cv::Rect_<float> rect;
-  //   int label;
-  //   float prob;
-  //   std::vector<cv::Point2f> kpt;
-  // };
+
+  void draw_blade(cv::Mat &img);
 
  private:
   std::string model_path_;
@@ -44,11 +40,15 @@ class Detector {
   ov::InferRequest infer_request_;
   ov::Tensor input_tensor_;
 
+  int padd_w_ = 0;
+  int padd_h_ = 0;
+
+  buff_interfaces::msg::BladeArray blade_array_;
+
   cv::Mat letterbox(cv::Mat &src, int h, int w);
 
-  buff_interfaces::msg::BladeArray non_max_suppression(ov::Tensor &output,
-                                                       float conf_thres,
-                                                       float iou_thres, int nc);
+  void non_max_suppression(ov::Tensor &output, float conf_thres,
+                           float iou_thres, int nc);
 
   const std::vector<std::string> class_names = {"RR", "RW", "BR", "BW"};
 };

@@ -5,15 +5,14 @@ Detector::Detector(const std::string model_path) : model_path_(model_path) {
   core_ = ov::Core();
   model_ = core_.read_model(model_path_);
 
-  // convert layout from [1, 18, 8400] to [1, 8400, 18]
   ov::preprocess::PrePostProcessor ppp(model_);
+  ppp.input().preprocess().convert_layout({0, 3, 1, 2});
+  // convert layout from [1, 18, 8400] to [1, 8400, 18]
   ppp.output().postprocess().convert_layout({0, 2, 1});
   model_ = ppp.build();
 
   compiled_model_ = core_.compile_model(model_, "CPU");
   infer_request_ = compiled_model_.create_infer_request();
-  auto input_info = compiled_model_.input();
-  // std::cout << "input_info: " << input_info << std::endl;
   input_tensor_ = infer_request_.get_input_tensor(0);
 }
 
@@ -23,65 +22,45 @@ Detector::Detector(const std::string model_path) : model_path_(model_path) {
 
 buff_interfaces::msg::BladeArray Detector::Detect(cv::Mat &src_img) {
   cv::Mat img;
-  // cv::cvtColor(src_img, img, cv::COLOR_BGR2RGB);
-  // cv::Mat img_input;
+
   cv::resize(src_img, img, cv::Size(IMG_SIZE, IMG_SIZE));
-  // cv::Mat img_input = letterbox(img, IMG_SIZE, IMG_SIZE);
-  // img_input.convertTo(img_input, CV_32FC3, 1.0 / 255);
-  // cv::imshow("img_input", img_input);
-  // cv::waitKey(1);
+  // img = letterbox(src_img, IMG_SIZE, IMG_SIZE);
 
-  // std::vector<float> img_data;
-  // img_data.assign((float *)img_input.datastart, (float *)img_input.dataend);
+  img.convertTo(img, CV_32FC3, 1.0 / 255.0);
 
-  auto data = input_tensor_.data<float>();
-
-  for (int h = 0; h < IMG_SIZE; h++) {
-    for (int w = 0; w < IMG_SIZE; w++) {
-      for (int c = 0; c < 3; c++) {
-        int out_index = c * IMG_SIZE * IMG_SIZE + h * IMG_SIZE + w;
-        data[out_index] = float(img.at<cv::Vec3b>(h, w)[c]) / 255.0f;
-      }
-    }
+  if (img.isContinuous()) {
+    img = img.reshape(1, 1);
+  } else {
+    img = img.clone().reshape(1, 1);
   }
+  input_tensor_ = ov::Tensor(input_tensor_.get_element_type(),
+                             input_tensor_.get_shape(), img.ptr<float>());
 
-  // std::copy(img_data.begin(), img_data.end(), data);
+  infer_request_.set_input_tensor(0, input_tensor_);
+
+  // the following method need 10x+ time than above 20240120
+  // auto data = input_tensor_.data<float>();
+  // for (int h = 0; h < IMG_SIZE; h++) {
+  //   for (int w = 0; w < IMG_SIZE; w++) {
+  //     for (int c = 0; c < 3; c++) {
+  //       int out_index = c * IMG_SIZE * IMG_SIZE + h * IMG_SIZE + w;
+  //       data[out_index] = float(img.at<cv::Vec3f>(h, w)[c]);
+  //     }
+  //   }
+  // }
+
   infer_request_.infer();
   // infer_request_.start_async();
   // infer_request_.wait();
   auto output = infer_request_.get_output_tensor(0);
-  // std::cout << "output: " << output.get_shape() << std::endl;
 
-  buff_interfaces::msg::BladeArray blade_array =
-      non_max_suppression(output, CONF_THRESHOLD, NMS_THRESHOLD, CLS_NUM);
+  non_max_suppression(output, CONF_THRESHOLD, NMS_THRESHOLD, CLS_NUM);
 
-  // std::vector<int> indices;
-
-  // cv::dnn::NMSBoxes(boxes, confidences, CONF_THRESHOLD, NMS_THRESHOLD,
-  // indices,
-  //                   CONF_REMAIN);
-
-  // for (size_t i = 0; i < indices.size(); ++i) {
-  //   int idx = indices[i];
-  //   std::cout << "idx: " << idx << std::endl;
-  // }
-
-  for (size_t i = 0; i < blade_array.blades.size(); ++i) {
-    blade_array.blades[i].x /= IMG_SIZE;
-    blade_array.blades[i].y /= IMG_SIZE;
-    blade_array.blades[i].width /= IMG_SIZE;
-    blade_array.blades[i].height /= IMG_SIZE;
-    for (size_t j = 0; j < blade_array.blades[i].kpt.size(); ++j) {
-      blade_array.blades[i].kpt[j].x /= IMG_SIZE;
-      blade_array.blades[i].kpt[j].y /= IMG_SIZE;
-    }
-  }
-
-  return blade_array;
+  return blade_array_;
 }
 
-buff_interfaces::msg::BladeArray Detector::non_max_suppression(
-    ov::Tensor &output, float conf_thres, float iou_thres, int nc) {
+void Detector::non_max_suppression(ov::Tensor &output, float conf_thres,
+                                   float iou_thres, int nc) {
   auto data = output.data<float>();
 
   int bs = output.get_shape()[0];  // batch size
@@ -119,8 +98,8 @@ buff_interfaces::msg::BladeArray Detector::non_max_suppression(
       std::vector<geometry_msgs::msg::Point> kpts;
       for (int k = 0; k < KPT_NUM; k++) {
         geometry_msgs::msg::Point kpt;
-        kpt.x = data[offset + 4 + nc + k * 2];
-        kpt.y = data[offset + 4 + nc + k * 2 + 1];
+        kpt.x = data[offset + 4 + nc + k * 2] / IMG_SIZE;
+        kpt.y = data[offset + 4 + nc + k * 2 + 1] / IMG_SIZE;
         kpts.push_back(kpt);
       }
       kpts_list.push_back(kpts);
@@ -130,30 +109,21 @@ buff_interfaces::msg::BladeArray Detector::non_max_suppression(
   cv::dnn::softNMSBoxes(boxes, confidences, picked_useless, conf_thres,
                         iou_thres, picked);
 
-  buff_interfaces::msg::BladeArray output_list;
-
+  blade_array_.blades.clear();
   for (size_t i = 0; i < picked.size(); ++i) {
     buff_interfaces::msg::Blade blade;
     int idx = picked[i];
-    blade.x = boxes[idx].x;
-    blade.y = boxes[idx].y;
-    blade.width = boxes[idx].width;
-    blade.height = boxes[idx].height;
+    blade.x = float(boxes[idx].x) / IMG_SIZE;
+    blade.y = float(boxes[idx].y) / IMG_SIZE;
+    blade.width = float(boxes[idx].width) / IMG_SIZE;
+    blade.height = float(boxes[idx].height) / IMG_SIZE;
     blade.label = classIds[idx];
     blade.prob = confidences[idx];
     blade.kpt = kpts_list[idx];
-    // std::cout << "idx: " << idx << std::endl;
-    // std::cout << "x: " << boxes[idx].x << " y: " << boxes[idx].y
-    //           << " w: " << boxes[idx].width << " h: " << boxes[idx].height
-    //           << std::endl;
-    // std::cout << "conf: " << confidences[idx] << std::endl;
-    // for (int k = 0; k < 10; k++) {
-    //   std::cout << data[idx * ml + 4 + k] << " ";
-    // }
-    output_list.blades.push_back(blade);
+    blade_array_.blades.push_back(blade);
   }
 
-  return output_list;
+  return;
 }
 
 cv::Mat Detector::letterbox(cv::Mat &src, int h, int w) {
@@ -182,6 +152,25 @@ cv::Mat Detector::letterbox(cv::Mat &src, int h, int w) {
                      cv::Scalar(114, 114, 114));
 
   return resize_img;
+}
+
+void Detector::draw_blade(cv::Mat &img) {
+  for (size_t i = 0; i < blade_array_.blades.size(); ++i) {
+    int kpt_idx[4] = {0, 1, 3, 4};
+    for (int j = 0; j < 2; j++) {
+      auto kpt_start =
+          cv::Point(int(blade_array_.blades[i].kpt[kpt_idx[j]].x * img.cols),
+                    int(blade_array_.blades[i].kpt[kpt_idx[j]].y * img.rows));
+      auto kpt_end = cv::Point(
+          int(blade_array_.blades[i].kpt[kpt_idx[j + 2]].x * img.cols),
+          int(blade_array_.blades[i].kpt[kpt_idx[j + 2]].y * img.rows));
+      cv::line(img, kpt_start, kpt_end, cv::Scalar(0, 255, 0), 4);
+    }
+    cv::circle(img,
+               cv::Point(blade_array_.blades[i].kpt[2].x * img.cols,
+                         blade_array_.blades[i].kpt[2].y * img.rows),
+               8, cv::Scalar(255, 0, 0), -1);
+  }
 }
 
 }  // namespace rm_buff

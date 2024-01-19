@@ -3,15 +3,17 @@
 namespace rm_buff {
 BuffDetectorNode::BuffDetectorNode(const rclcpp::NodeOptions& options)
     : Node("detector_node", options) {
-  publisher_ =
-      this->create_publisher<buff_interfaces::msg::BladeArray>("result", 10);
+  publisher_ = this->create_publisher<buff_interfaces::msg::BladeArray>(
+      "/detector/result", 10);
+  latency_publisher_ =
+      this->create_publisher<std_msgs::msg::String>("/latency/inference", 10);
+  result_img_pub_ =
+      image_transport::create_publisher(this, "/detector/result_img");
+
   auto pkg_path = ament_index_cpp::get_package_share_directory("buff_detector");
-  //   detector_ = std::make_unique<Detector>(pkg_path +
-  //   "/models/best_100b.xml");
-  //   detector_ =
-  //       std::make_unique<Detector>(pkg_path + "/models/half/best_100b.xml");
   detector_ =
       std::make_unique<Detector>(pkg_path + "/models/best_100b_quantized.xml");
+  RCLCPP_INFO(this->get_logger(), "Model loaded");
 
   cam_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
       "/camera_info", rclcpp::SensorDataQoS(),
@@ -27,17 +29,13 @@ BuffDetectorNode::BuffDetectorNode(const rclcpp::NodeOptions& options)
   img_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
       "/image_raw", rclcpp::SensorDataQoS(),
       std::bind(&BuffDetectorNode::imageCallback, this, std::placeholders::_1));
+
+  RCLCPP_INFO(this->get_logger(), "Detector node initialized");
 }
 
 void BuffDetectorNode::imageCallback(
     const sensor_msgs::msg::Image::SharedPtr msg) {
-  RCLCPP_INFO(this->get_logger(), "Image received");
-  RCLCPP_INFO(this->get_logger(), "Image size: %dx%d", msg->width, msg->height);
-
-  // Convert to cv::Mat
   auto img = cv_bridge::toCvShare(msg, "rgb8")->image;
-
-  RCLCPP_INFO(this->get_logger(), "Image converted");
 
   // start time
   auto start = std::chrono::steady_clock::now();
@@ -45,10 +43,22 @@ void BuffDetectorNode::imageCallback(
 
   // end time
   auto end = std::chrono::steady_clock::now();
-  // log time
+
+  // publish
   auto time =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-  RCLCPP_INFO(this->get_logger(), "Frame time:  %ldms", time.count());
+  std_msgs::msg::String latency_msg;
+  latency_msg.data = std::to_string(time.count());
+  latency_publisher_->publish(latency_msg);
+  if (result.blades.size() == 0) {
+    RCLCPP_DEBUG(this->get_logger(), "No blade detected");
+  } else {
+    RCLCPP_DEBUG(this->get_logger(), "Blade detected");
+    // draw blade
+    detector_->draw_blade(img);
+  }
+  result_img_pub_.publish(
+      cv_bridge::CvImage(msg->header, "rgb8", img).toImageMsg());
 
   publisher_->publish(result);
 }
