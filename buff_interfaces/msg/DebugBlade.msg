@@ -4,4 +4,6 @@ float64 width
 float64 height
 int64 label
 float64 prob
+geometry_msgs/Pose pose
+geometry_msgs/Point center
 geometry_msgs/Point[] kpt

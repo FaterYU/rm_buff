@@ -6,14 +6,12 @@
 #include <string>
 #include <vector>
 
-#include "buff_interfaces/msg/blade.hpp"
-#include "buff_interfaces/msg/blade_array.hpp"
+#include "buff_detector/blade.hpp"
 #include "geometry_msgs/msg/point.hpp"
 #include "openvino/openvino.hpp"
 
-#define NMS_THRESHOLD 0.10f
+#define NMS_THRESHOLD 0.05f
 #define CONF_THRESHOLD 0.70f
-#define CONF_REMAIN 0.0
 #define IMG_SIZE 640
 #define KPT_NUM 5
 #define CLS_NUM 4
@@ -26,7 +24,7 @@ class Detector {
   Detector(const std::string model_path);
   // ~Detector();
 
-  buff_interfaces::msg::BladeArray Detect(cv::Mat &image);
+  std::vector<Blade> Detect(cv::Mat &image);
 
   void draw_blade(cv::Mat &img);
 
@@ -43,12 +41,12 @@ class Detector {
   int padd_w_ = 0;
   int padd_h_ = 0;
 
-  buff_interfaces::msg::BladeArray blade_array_;
+  std::vector<Blade> blade_array_;
 
   cv::Mat letterbox(cv::Mat &src, int h, int w);
 
   void non_max_suppression(ov::Tensor &output, float conf_thres,
-                           float iou_thres, int nc);
+                           float iou_thres, int nc, cv::Size img_size);
 
   const std::vector<std::string> class_names = {"RR", "RW", "BR", "BW"};
 };
