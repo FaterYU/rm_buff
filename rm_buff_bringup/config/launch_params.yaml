@@ -5,5 +5,5 @@ odom2camera:
   rpy: "\"0.0  0.0  0.0\""
 
 detector_log_level: INFO
-tracker_log_level: INFO
+tracker_log_level: DEBUG
 serial_log_level: INFO
