@@ -28,6 +28,7 @@ void ExtendedKalmanFilter::setInitState(const Eigen::VectorXd & x0)
   p0.setIdentity();
   P_post = p0;
   P_pri = p0;
+  x_pri = x0;
 }
 
 Eigen::MatrixXd ExtendedKalmanFilter::predict()
