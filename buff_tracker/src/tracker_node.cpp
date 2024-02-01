@@ -15,6 +15,9 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions & options)
 
   tracker_ = std::make_unique<Tracker>(max_match_theta, max_match_center_xoy);
   tracker_->tracking_threshold = this->declare_parameter("tracker.tracking_threshold", 4);
+  tracker_->robot_z_ground = this->declare_parameter("tracker.robot_z_ground", 200.0);
+  tracker_->distance = this->declare_parameter("tracker.distance", 6626.0);
+  tracker_->max_distance_diff = this->declare_parameter("tracker.max_distance_diff", 905.0);
 
   // EKF
   // xc = x_rune_center, xb = x_blade_center
@@ -83,9 +86,9 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions & options)
     return h;
   };
   // update_Q - process noise covariance matrix
-  // s2qxyz_ = declare_parameter("ekf.sigma2_q_xyz", 20.0);
-  // s2qyaw_ = declare_parameter("ekf.sigma2_q_yaw", 100.0);
-  // s2qr_ = declare_parameter("ekf.sigma2_q_r", 800.0);
+  s2qxyz_ = declare_parameter("ekf.sigma2_q_xyz", 20.0);
+  s2qtheta_ = declare_parameter("ekf.sigma2_q_theta", 100.0);
+  s2qr_ = declare_parameter("ekf.sigma2_q_r", 80.0);
   auto u_q = [this]() {
     Eigen::MatrixXd q(9, 9);
     // double t = dt_, x = s2qxyz_, y = s2qyaw_, r = s2qr_;
@@ -93,7 +96,7 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions & options)
     // double q_y_y = pow(t, 4) / 4 * y, q_y_vy = pow(t, 3) / 2 * x, q_vy_vy = pow(t, 2) * y;
     // double q_r = pow(t, 4) / 4 * r;
     double t = dt_;
-    double x = 20.0, y = 100.0, z = 20.0, theta = 100.0, r = 800.0;
+    double x = s2qxyz_, y = s2qxyz_, z = s2qxyz_, theta = s2qtheta_, r = s2qr_;
     double q_x_x = pow(t, 4) / 4 * x, q_x_vx = pow(t, 3) / 2 * x, q_vx_vx = pow(t, 2) * x;
     double q_y_y = pow(t, 4) / 4 * y, q_y_vy = pow(t, 3) / 2 * x, q_vy_vy = pow(t, 2) * y;
     double q_z_z = pow(t, 4) / 4 * z, q_z_vz = pow(t, 3) / 2 * x, q_vz_vz = pow(t, 2) * z;
@@ -114,13 +117,14 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions & options)
     return q;
   };
   // update_R - measurement noise covariance matrix
-  // r_blade = declare_parameter("ekf.r_blade", 0.05);
-  // r_center = declare_parameter("ekf.r_center", 0.02);
+  r_blade_ = declare_parameter("ekf.r_blade", 0.02);
+  r_center_ = declare_parameter("ekf.r_center", 0.02);
   auto u_r = [this](const Eigen::VectorXd & z) {
     Eigen::DiagonalMatrix<double, 6> r;
-    double x = 0.05;
-    r.diagonal() << abs(x * z(0)), abs(x * z(1)), abs(x * z(2)), abs(x * z(3)), abs(x * z(4)),
-      abs(x * z(5));
+    double xb = r_blade_;
+    double xc = r_center_;
+    r.diagonal() << abs(xb * z(0)), abs(xb * z(1)), abs(xb * z(2)), abs(xc * z(3)), abs(xc * z(4)),
+      abs(xc * z(5));
     return r;
   };
   // P - error estimate covariance matrix
@@ -144,8 +148,7 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions & options)
   tf2_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf2_buffer_);
   // subscriber and filter
   blades_sub_.subscribe(this, "/detector/blade_array", rmw_qos_profile_sensor_data);
-  // target_frame_ = this->declare_parameter("target_frame", "odom");
-  target_frame_ = "odom";
+  target_frame_ = this->declare_parameter("target_frame", "odom");
   tf2_filter_ = std::make_shared<tf2_filter>(
     blades_sub_, *tf2_buffer_, target_frame_, 10, this->get_node_logging_interface(),
     this->get_node_clock_interface(), std::chrono::duration<int>(1));

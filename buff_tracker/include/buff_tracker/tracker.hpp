@@ -28,16 +28,11 @@
 
 #include "buff_tracker/extended_kalman_filter.hpp"
 
-namespace rm_buff
-{
-
 #define PI 3.1415926
 #define BLADE_R_OFFSET 700.0
-#define BLADE_Z_GROUND 2304.0 - 850.0
-#define ROBOT_Z_GROUND 200.0
 #define OMEGA 1.0 / 3 * PI
-#define DISTENCE 6626.0
-#define MAX_DISTENCE_DIFF 805.0 + 100.0
+namespace rm_buff
+{
 class Tracker
 {
 public:
@@ -53,6 +48,11 @@ public:
   int lost_threshold;
   // bullet flight duration not enough ~ ms
   int timeout_threshold;
+
+  double blade_z_ground;
+  double robot_z_ground;
+  double distance;
+  double max_distance_diff;
 
   enum State {
     LOST,

@@ -9,12 +9,18 @@ BuffDetectorNode::BuffDetectorNode(const rclcpp::NodeOptions & options)
     this->create_publisher<buff_interfaces::msg::BladeArray>("/detector/blade_array", 10);
   debug_blades_publisher_ =
     this->create_publisher<buff_interfaces::msg::DebugBladeArray>("/debug/blade_array", 10);
-  latency_publisher_ = this->create_publisher<std_msgs::msg::String>("/latency/inference", 10);
+  latency_publisher_ = this->create_publisher<std_msgs::msg::String>("/inference/latency", 10);
   result_img_pub_ = image_transport::create_publisher(this, "/detector/result_img");
 
   auto pkg_path = ament_index_cpp::get_package_share_directory("buff_detector");
-  detector_ = std::make_unique<Detector>(pkg_path + "/models/best_quantized.xml");
+  auto model_path = pkg_path + "/models/" + this->declare_parameter("model", "best_quantized.xml");
+  detector_ = std::make_unique<Detector>(model_path);
   RCLCPP_INFO(this->get_logger(), "Model loaded");
+
+  // param
+  detector_->nms_threshold = this->declare_parameter("detector.nms_threshold", 0.05);
+  detector_->conf_threshold = this->declare_parameter("detector.conf_threshold", 0.70);
+  detector_->image_size = this->declare_parameter("detector.image_size", 640);
 
   cam_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
     "/camera_info", rclcpp::SensorDataQoS(),

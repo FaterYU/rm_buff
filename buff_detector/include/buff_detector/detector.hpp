@@ -10,25 +10,28 @@
 #include "geometry_msgs/msg/point.hpp"
 #include "openvino/openvino.hpp"
 
-#define NMS_THRESHOLD 0.05f
-#define CONF_THRESHOLD 0.70f
-#define IMG_SIZE 640
 #define KPT_NUM 5
 #define CLS_NUM 4
-#define VIDEO
 
-namespace rm_buff {
-class Detector {
- public:
+namespace rm_buff
+{
+class Detector
+{
+public:
   // Detector();
   Detector(const std::string model_path);
   // ~Detector();
 
-  std::vector<Blade> Detect(cv::Mat &image);
+  std::vector<Blade> Detect(cv::Mat & image);
 
-  void draw_blade(cv::Mat &img);
+  void draw_blade(cv::Mat & img);
 
- private:
+  // param
+  double nms_threshold;
+  double conf_threshold;
+  double image_size;
+
+private:
   std::string model_path_;
   std::string bin_path_;
 
@@ -43,10 +46,10 @@ class Detector {
 
   std::vector<Blade> blade_array_;
 
-  cv::Mat letterbox(cv::Mat &src, int h, int w);
+  cv::Mat letterbox(cv::Mat & src, int h, int w);
 
-  void non_max_suppression(ov::Tensor &output, float conf_thres,
-                           float iou_thres, int nc, cv::Size img_size);
+  void non_max_suppression(
+    ov::Tensor & output, float conf_thres, float iou_thres, int nc, cv::Size img_size);
 
   const std::vector<std::string> class_names = {"RR", "RW", "BR", "BW"};
 };

@@ -105,13 +105,13 @@ void Tracker::update(const buff_interfaces::msg::BladeArray::SharedPtr & blades_
   }
 
   // Limit fixed-length variables
-  target_state(2) = (BLADE_Z_GROUND - ROBOT_Z_GROUND) / 1000;
+  target_state(2) = (blade_z_ground - robot_z_ground) / 1000;
   target_state(6) = BLADE_R_OFFSET / 1000;
   target_state(8) = OMEGA;
   // auto distance = pow(target_state(0), 2) + pow(target_state(1), 0.5) * 1000;
-  // if (distance > DISTENCE + MAX_DISTENCE_DIFF || distance < DISTENCE - MAX_DISTENCE_DIFF) {
-  //   target_state(0) *= DISTENCE / distance;
-  //   target_state(1) *= DISTENCE / distance;
+  // if (distance > distance + max_distance_diff || distance < distance - max_distance_diff) {
+  //   target_state(0) *= distance / distance;
+  //   target_state(1) *= distance / distance;
   //   RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"), "ERROR center distance");
   // }
   ekf.setState(target_state);
@@ -152,7 +152,7 @@ void Tracker::initEKF(const blade_transform & blade)
 {
   double xc = blade.center_position.x;
   double yc = blade.center_position.y;
-  double zc = (BLADE_Z_GROUND - ROBOT_Z_GROUND) / 1000;
+  double zc = (blade_z_ground - robot_z_ground) / 1000;
   double r = BLADE_R_OFFSET / 1000;
   double theta = blade.theta;
   double omega = OMEGA;

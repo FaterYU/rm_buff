@@ -45,6 +45,13 @@ private:
 
   std::unique_ptr<Tracker> tracker_;
 
+  // param
+  double s2qxyz_;
+  double s2qtheta_;
+  double s2qr_;
+  double r_blade_;
+  double r_center_;
+
   // Subscriber with tf2 message_filter
   std::string target_frame_;
   std::shared_ptr<tf2_ros::Buffer> tf2_buffer_;

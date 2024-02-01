@@ -2,6 +2,8 @@
 *.avi
 *.onnx
 *.pt
+*.o
 datasets/
 best_100b_openvino_model/
 .vscode/
+build/

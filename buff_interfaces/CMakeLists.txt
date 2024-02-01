@@ -18,6 +18,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/DebugBladeArray.msg"
   "msg/Rune.msg"
   "msg/RuneInfo.msg"
+  "msg/TimeInfo.msg"
 
   DEPENDENCIES
     std_msgs
