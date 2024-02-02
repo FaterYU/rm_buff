@@ -1,45 +1,51 @@
 #include "buff_detector/detector_node.hpp"
 
-namespace rm_buff
-{
-BuffDetectorNode::BuffDetectorNode(const rclcpp::NodeOptions & options)
-: Node("detector_node", options)
-{
-  blades_publisher_ =
-    this->create_publisher<buff_interfaces::msg::BladeArray>("/detector/blade_array", 10);
+namespace rm_buff {
+BuffDetectorNode::BuffDetectorNode(const rclcpp::NodeOptions& options)
+    : Node("detector_node", options) {
+  blades_publisher_ = this->create_publisher<buff_interfaces::msg::BladeArray>(
+      "/detector/blade_array", 10);
   debug_blades_publisher_ =
-    this->create_publisher<buff_interfaces::msg::DebugBladeArray>("/debug/blade_array", 10);
-  latency_publisher_ = this->create_publisher<std_msgs::msg::String>("/inference/latency", 10);
-  result_img_pub_ = image_transport::create_publisher(this, "/detector/result_img");
+      this->create_publisher<buff_interfaces::msg::DebugBladeArray>(
+          "/debug/blade_array", 10);
+  latency_publisher_ =
+      this->create_publisher<std_msgs::msg::String>("/inference/latency", 10);
+  result_img_pub_ =
+      image_transport::create_publisher(this, "/detector/buff_result_img");
 
   auto pkg_path = ament_index_cpp::get_package_share_directory("buff_detector");
-  auto model_path = pkg_path + "/models/" + this->declare_parameter("model", "best_quantized.xml");
+  auto model_path = pkg_path + "/models/" +
+                    this->declare_parameter("model", "best_quantized.xml");
   detector_ = std::make_unique<Detector>(model_path);
   RCLCPP_INFO(this->get_logger(), "Model loaded");
 
   // param
-  detector_->nms_threshold = this->declare_parameter("detector.nms_threshold", 0.05);
-  detector_->conf_threshold = this->declare_parameter("detector.conf_threshold", 0.70);
+  detector_->nms_threshold =
+      this->declare_parameter("detector.nms_threshold", 0.05);
+  detector_->conf_threshold =
+      this->declare_parameter("detector.conf_threshold", 0.70);
   detector_->image_size = this->declare_parameter("detector.image_size", 640);
 
   cam_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
-    "/camera_info", rclcpp::SensorDataQoS(),
-    [this](sensor_msgs::msg::CameraInfo::ConstSharedPtr camera_info) {
-      cam_center_ = cv::Point2f(camera_info->k[2], camera_info->k[5]);
-      cam_info_ = std::make_shared<sensor_msgs::msg::CameraInfo>(*camera_info);
-      pnp_solver_ = std::make_unique<PnPSolver>(camera_info->k, camera_info->d);
-      cam_info_sub_.reset();
-    });
+      "/camera_info", rclcpp::SensorDataQoS(),
+      [this](sensor_msgs::msg::CameraInfo::ConstSharedPtr camera_info) {
+        cam_center_ = cv::Point2f(camera_info->k[2], camera_info->k[5]);
+        cam_info_ =
+            std::make_shared<sensor_msgs::msg::CameraInfo>(*camera_info);
+        pnp_solver_ =
+            std::make_unique<PnPSolver>(camera_info->k, camera_info->d);
+        cam_info_sub_.reset();
+      });
 
   img_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
-    "/image_raw", rclcpp::SensorDataQoS(),
-    std::bind(&BuffDetectorNode::imageCallback, this, std::placeholders::_1));
+      "/image_raw", rclcpp::SensorDataQoS(),
+      std::bind(&BuffDetectorNode::imageCallback, this, std::placeholders::_1));
 
   RCLCPP_INFO(this->get_logger(), "Detector node initialized");
 }
 
-void BuffDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr msg)
-{
+void BuffDetectorNode::imageCallback(
+    const sensor_msgs::msg::Image::ConstSharedPtr msg) {
   if (pnp_solver_ != nullptr) {
     auto blades = DetectBlades(msg);
 
@@ -49,7 +55,7 @@ void BuffDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedP
     buff_interfaces::msg::DebugBladeArray debug_blade_array;
 
     // publish blade array
-    for (auto & blade : blades) {
+    for (auto& blade : blades) {
       buff_interfaces::msg::DebugBlade debug_blade_msg;
       debug_blade_msg.x = blade.rect.x;
       debug_blade_msg.y = blade.rect.y;
@@ -57,7 +63,7 @@ void BuffDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedP
       debug_blade_msg.height = blade.rect.height;
       debug_blade_msg.label = blade.label;
       debug_blade_msg.prob = blade.prob;
-      for (auto & kpt : blade.kpt) {
+      for (auto& kpt : blade.kpt) {
         geometry_msgs::msg::Point point;
         point.x = kpt.x;
         point.y = kpt.y;
@@ -75,11 +81,11 @@ void BuffDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedP
         cv::Rodrigues(rvec, rotation_matrix);
 
         tf2::Matrix3x3 tf_rotation_matrix(
-          rotation_matrix.at<double>(0, 0), rotation_matrix.at<double>(0, 1),
-          rotation_matrix.at<double>(0, 2), rotation_matrix.at<double>(1, 0),
-          rotation_matrix.at<double>(1, 1), rotation_matrix.at<double>(1, 2),
-          rotation_matrix.at<double>(2, 0), rotation_matrix.at<double>(2, 1),
-          rotation_matrix.at<double>(2, 2));
+            rotation_matrix.at<double>(0, 0), rotation_matrix.at<double>(0, 1),
+            rotation_matrix.at<double>(0, 2), rotation_matrix.at<double>(1, 0),
+            rotation_matrix.at<double>(1, 1), rotation_matrix.at<double>(1, 2),
+            rotation_matrix.at<double>(2, 0), rotation_matrix.at<double>(2, 1),
+            rotation_matrix.at<double>(2, 2));
         tf2::Quaternion tf_quaternion;
         tf_rotation_matrix.getRotation(tf_quaternion);
         blade_msg.pose.orientation = tf2::toMsg(tf_quaternion);
@@ -103,8 +109,7 @@ void BuffDetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedP
 }
 
 std::vector<Blade> BuffDetectorNode::DetectBlades(
-  const sensor_msgs::msg::Image::ConstSharedPtr & image_msg)
-{
+    const sensor_msgs::msg::Image::ConstSharedPtr& image_msg) {
   auto img = cv_bridge::toCvShare(image_msg, "rgb8")->image;
 
   // start time
@@ -115,7 +120,8 @@ std::vector<Blade> BuffDetectorNode::DetectBlades(
   auto end = std::chrono::steady_clock::now();
 
   // publish
-  auto time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+  auto time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
   std_msgs::msg::String latency_msg;
   latency_msg.data = std::to_string(time.count());
   latency_publisher_->publish(latency_msg);
@@ -126,7 +132,8 @@ std::vector<Blade> BuffDetectorNode::DetectBlades(
     // draw blade
     detector_->draw_blade(img);
   }
-  result_img_pub_.publish(cv_bridge::CvImage(image_msg->header, "rgb8", img).toImageMsg());
+  result_img_pub_.publish(
+      cv_bridge::CvImage(image_msg->header, "rgb8", img).toImageMsg());
 
   return result;
 }

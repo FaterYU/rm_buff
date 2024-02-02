@@ -6,3 +6,4 @@ float64 r
 float64 theta
 float64 omega
 int32 offset_id
+int64 t_offset

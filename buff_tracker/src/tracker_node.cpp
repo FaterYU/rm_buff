@@ -1,30 +1,34 @@
 #include "buff_tracker/tracker_node.hpp"
 
-namespace rm_buff
-{
+namespace rm_buff {
 
-BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions & options)
-: Node("tracker_node", options)
-{
+BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions &options)
+    : Node("tracker_node", options) {
   RCLCPP_INFO(this->get_logger(), "Tracker node initialized");
 
   // Parameters
-  lost_time_threshold_ = this->declare_parameter("tracker.lost_time_threshold", 0.5);
-  double max_match_theta = this->declare_parameter("tracker.max_match_theta", 0.628);
-  double max_match_center_xoy = this->declare_parameter("tracker.max_match_center_xoy", 10.0);
+  lost_time_threshold_ =
+      this->declare_parameter("tracker.lost_time_threshold", 0.5);
+  double max_match_theta =
+      this->declare_parameter("tracker.max_match_theta", 0.628);
+  double max_match_center_xoy =
+      this->declare_parameter("tracker.max_match_center_xoy", 10.0);
 
   tracker_ = std::make_unique<Tracker>(max_match_theta, max_match_center_xoy);
-  tracker_->tracking_threshold = this->declare_parameter("tracker.tracking_threshold", 4);
-  tracker_->robot_z_ground = this->declare_parameter("tracker.robot_z_ground", 200.0);
+  tracker_->tracking_threshold =
+      this->declare_parameter("tracker.tracking_threshold", 4);
+  tracker_->robot_z_ground =
+      this->declare_parameter("tracker.robot_z_ground", 200.0);
   tracker_->distance = this->declare_parameter("tracker.distance", 6626.0);
-  tracker_->max_distance_diff = this->declare_parameter("tracker.max_distance_diff", 905.0);
+  tracker_->max_distance_diff =
+      this->declare_parameter("tracker.max_distance_diff", 905.0);
 
   // EKF
   // xc = x_rune_center, xb = x_blade_center
   // state: x, y, z, vx, vy, vz, r, theta, omega
   // measurement: xb, yb, zb, xc, yc, zc
   // f - Process function
-  auto f = [this](const Eigen::VectorXd & x) {
+  auto f = [this](const Eigen::VectorXd &x) {
     Eigen::VectorXd x_new = x;
     x_new(0) += x(3) * dt_;
     x_new(1) += x(4) * dt_;
@@ -50,7 +54,7 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions & options)
     return f;
   };
   // h - Observation function
-  auto h = [](const Eigen::VectorXd & x) {
+  auto h = [](const Eigen::VectorXd &x) {
     Eigen::VectorXd z(6);
     double xc = x(0), yc = x(1), zc = x(2), r = x(6), theta = -x(7);
     double st = sin(theta), ct = cos(theta);
@@ -65,7 +69,7 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions & options)
     return z;
   };
   // J_h - Jacobian of observation function
-  auto j_h = [](const Eigen::VectorXd & x) {
+  auto j_h = [](const Eigen::VectorXd &x) {
     Eigen::MatrixXd h(6, 9);
     double xc = x(0), yc = x(1), r = x(6), theta = -x(7);
     double st = sin(theta), ct = cos(theta);
@@ -92,14 +96,17 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions & options)
   auto u_q = [this]() {
     Eigen::MatrixXd q(9, 9);
     // double t = dt_, x = s2qxyz_, y = s2qyaw_, r = s2qr_;
-    // double q_x_x = pow(t, 4) / 4 * x, q_x_vx = pow(t, 3) / 2 * x, q_vx_vx = pow(t, 2) * x;
-    // double q_y_y = pow(t, 4) / 4 * y, q_y_vy = pow(t, 3) / 2 * x, q_vy_vy = pow(t, 2) * y;
-    // double q_r = pow(t, 4) / 4 * r;
+    // double q_x_x = pow(t, 4) / 4 * x, q_x_vx = pow(t, 3) / 2 * x, q_vx_vx =
+    // pow(t, 2) * x; double q_y_y = pow(t, 4) / 4 * y, q_y_vy = pow(t, 3) / 2 *
+    // x, q_vy_vy = pow(t, 2) * y; double q_r = pow(t, 4) / 4 * r;
     double t = dt_;
     double x = s2qxyz_, y = s2qxyz_, z = s2qxyz_, theta = s2qtheta_, r = s2qr_;
-    double q_x_x = pow(t, 4) / 4 * x, q_x_vx = pow(t, 3) / 2 * x, q_vx_vx = pow(t, 2) * x;
-    double q_y_y = pow(t, 4) / 4 * y, q_y_vy = pow(t, 3) / 2 * x, q_vy_vy = pow(t, 2) * y;
-    double q_z_z = pow(t, 4) / 4 * z, q_z_vz = pow(t, 3) / 2 * x, q_vz_vz = pow(t, 2) * z;
+    double q_x_x = pow(t, 4) / 4 * x, q_x_vx = pow(t, 3) / 2 * x,
+           q_vx_vx = pow(t, 2) * x;
+    double q_y_y = pow(t, 4) / 4 * y, q_y_vy = pow(t, 3) / 2 * x,
+           q_vy_vy = pow(t, 2) * y;
+    double q_z_z = pow(t, 4) / 4 * z, q_z_vz = pow(t, 3) / 2 * x,
+           q_vz_vz = pow(t, 2) * z;
     double q_r = pow(t, 4) / 4 * r;
     double q_theta = pow(t, 4) / 4 * theta;
     // clang-format off
@@ -119,12 +126,12 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions & options)
   // update_R - measurement noise covariance matrix
   r_blade_ = declare_parameter("ekf.r_blade", 0.02);
   r_center_ = declare_parameter("ekf.r_center", 0.02);
-  auto u_r = [this](const Eigen::VectorXd & z) {
+  auto u_r = [this](const Eigen::VectorXd &z) {
     Eigen::DiagonalMatrix<double, 6> r;
     double xb = r_blade_;
     double xc = r_center_;
-    r.diagonal() << abs(xb * z(0)), abs(xb * z(1)), abs(xb * z(2)), abs(xc * z(3)), abs(xc * z(4)),
-      abs(xc * z(5));
+    r.diagonal() << abs(xb * z(0)), abs(xb * z(1)), abs(xb * z(2)),
+        abs(xc * z(3)), abs(xc * z(4)), abs(xc * z(5));
     return r;
   };
   // P - error estimate covariance matrix
@@ -133,9 +140,10 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions & options)
   tracker_->ekf = ExtendedKalmanFilter{f, h, j_f, j_h, u_q, u_r, p0};
 
   // Create publishers
-  rune_publisher_ = this->create_publisher<buff_interfaces::msg::Rune>("/tracker/rune", 10);
-  rune_info_publisher_ =
-    this->create_publisher<buff_interfaces::msg::RuneInfo>("tracker/rune_info", 10);
+  rune_publisher_ =
+      this->create_publisher<buff_interfaces::msg::Rune>("/tracker/rune", 10);
+  rune_info_publisher_ = this->create_publisher<buff_interfaces::msg::RuneInfo>(
+      "tracker/rune_info", 10);
 
   // Subscriber with tf2 message_filter
   // tf2 relevant
@@ -143,29 +151,32 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions & options)
   // Create the timer interface before call to waitForTransform,
   // to avoid a tf2_ros::CreateTimerInterfaceException exception
   auto timer_interface = std::make_shared<tf2_ros::CreateTimerROS>(
-    this->get_node_base_interface(), this->get_node_timers_interface());
+      this->get_node_base_interface(), this->get_node_timers_interface());
   tf2_buffer_->setCreateTimerInterface(timer_interface);
   tf2_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf2_buffer_);
   // subscriber and filter
-  blades_sub_.subscribe(this, "/detector/blade_array", rmw_qos_profile_sensor_data);
+  blades_sub_.subscribe(this, "/detector/blade_array",
+                        rmw_qos_profile_sensor_data);
   target_frame_ = this->declare_parameter("target_frame", "odom");
   tf2_filter_ = std::make_shared<tf2_filter>(
-    blades_sub_, *tf2_buffer_, target_frame_, 10, this->get_node_logging_interface(),
-    this->get_node_clock_interface(), std::chrono::duration<int>(1));
-  // Register a callback with tf2_ros::MessageFilter to be called when transforms are available
+      blades_sub_, *tf2_buffer_, target_frame_, 10,
+      this->get_node_logging_interface(), this->get_node_clock_interface(),
+      std::chrono::duration<int>(1));
+  // Register a callback with tf2_ros::MessageFilter to be called when
+  // transforms are available
   tf2_filter_->registerCallback(&BuffTrackerNode::bladesCallback, this);
 }
 
-void BuffTrackerNode::bladesCallback(const buff_interfaces::msg::BladeArray::SharedPtr blades_msg)
-{
+void BuffTrackerNode::bladesCallback(
+    const buff_interfaces::msg::BladeArray::SharedPtr blades_msg) {
   // Tranform blade position from image frame to world coordinate
-  for (auto & blade : blades_msg->blades) {
+  for (auto &blade : blades_msg->blades) {
     geometry_msgs::msg::TransformStamped transform_stamped;
     try {
       transform_stamped = tf2_buffer_->lookupTransform(
-        target_frame_, blades_msg->header.frame_id, blades_msg->header.stamp,
-        rclcpp::Duration::from_seconds(0.0));
-    } catch (tf2::TransformException & ex) {
+          target_frame_, blades_msg->header.frame_id, blades_msg->header.stamp,
+          rclcpp::Duration::from_seconds(0.0));
+    } catch (tf2::TransformException &ex) {
       RCLCPP_WARN(this->get_logger(), "%s", ex.what());
       return;
     }
@@ -174,10 +185,11 @@ void BuffTrackerNode::bladesCallback(const buff_interfaces::msg::BladeArray::Sha
 
   // filter ignored blades
   blades_msg->blades.erase(
-    std::remove_if(
-      blades_msg->blades.begin(), blades_msg->blades.end(),
-      [](const buff_interfaces::msg::Blade & blade) { return blade.label % 2 == 1; }),
-    blades_msg->blades.end());
+      std::remove_if(blades_msg->blades.begin(), blades_msg->blades.end(),
+                     [](const buff_interfaces::msg::Blade &blade) {
+                       return blade.label % 2 == 1;
+                     }),
+      blades_msg->blades.end());
 
   // Init message
   rclcpp::Time time = blades_msg->header.stamp;
@@ -191,6 +203,7 @@ void BuffTrackerNode::bladesCallback(const buff_interfaces::msg::BladeArray::Sha
   // Update tracker
   if (tracker_->tracker_state == Tracker::State::LOST) {
     tracker_->init(blades_msg);
+    rune_msg.tracking = false;
   } else {
     dt_ = (time - last_time_).seconds();
     tracker_->lost_threshold = static_cast<int>(lost_time_threshold_ / dt_);
@@ -207,11 +220,10 @@ void BuffTrackerNode::bladesCallback(const buff_interfaces::msg::BladeArray::Sha
 
     if (tracker_->tracker_state == Tracker::State::DETECTING) {
       rune_msg.tracking = false;
-    } else if (
-      tracker_->tracker_state == Tracker::State::TRACKING ||
-      tracker_->tracker_state == Tracker::State::TEMP_LOST) {
+    } else if (tracker_->tracker_state == Tracker::State::TRACKING ||
+               tracker_->tracker_state == Tracker::State::TEMP_LOST) {
       rune_msg.tracking = true;
-      const auto & state = tracker_->target_state;
+      const auto &state = tracker_->target_state;
       rune_msg.position.x = state(0);
       rune_msg.position.y = state(1);
       rune_msg.position.z = state(2);
