@@ -3,7 +3,7 @@
 namespace rm_buff {
 
 BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions &options)
-    : Node("tracker_node", options) {
+    : Node("buff_tracker", options) {
   RCLCPP_INFO(this->get_logger(), "Tracker node initialized");
 
   // Parameters
@@ -17,6 +17,8 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions &options)
   tracker_ = std::make_unique<Tracker>(max_match_theta, max_match_center_xoy);
   tracker_->tracking_threshold =
       this->declare_parameter("tracker.tracking_threshold", 4);
+  tracker_->blade_z_ground =
+      this->declare_parameter("tracker.blade_z_ground", 200.0);
   tracker_->robot_z_ground =
       this->declare_parameter("tracker.robot_z_ground", 200.0);
   tracker_->distance = this->declare_parameter("tracker.distance", 6626.0);
@@ -26,15 +28,14 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions &options)
   // EKF
   // xc = x_rune_center, xb = x_blade_center
   // state: x, y, z, vx, vy, vz, r, theta, omega
-  // measurement: xb, yb, zb, xc, yc, zc
+  // measurement: xb, yb, zb, theta
   // f - Process function
   auto f = [this](const Eigen::VectorXd &x) {
     Eigen::VectorXd x_new = x;
     x_new(0) += x(3) * dt_;
     x_new(1) += x(4) * dt_;
-    // x_new(2) += x(6) * dt_;
+    x_new(2) += x(5) * dt_;
     x_new(7) += x(8) * dt_;
-    std::cout << "x(7): " << x(7) << " x_new(7): " << x_new(7) << std::endl;
     return x_new;
   };
   // J_f - Jacobian of process function
@@ -43,7 +44,7 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions &options)
     // clang-format off
     f <<  1,   0,   0,   dt_, 0,   0,   0,   0,   0,
           0,   1,   0,   0,   dt_, 0,   0,   0,   0,
-          0,   0,   1,   0,   0,   0,   0,   0,   0, 
+          0,   0,   1,   0,   0,   dt_, 0,   0,   0, 
           0,   0,   0,   1,   0,   0,   0,   0,   0,
           0,   0,   0,   0,   1,   0,   0,   0,   0,
           0,   0,   0,   0,   0,   1,   0,   0,   0,
@@ -55,37 +56,30 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions &options)
   };
   // h - Observation function
   auto h = [](const Eigen::VectorXd &x) {
-    Eigen::VectorXd z(6);
-    double xc = x(0), yc = x(1), zc = x(2), r = x(6), theta = -x(7);
+    Eigen::VectorXd z(4);
+    double xc = x(0), yc = x(1), zc = x(2), r = x(6), theta = x(7);
     double st = sin(theta), ct = cos(theta);
     double dn_1_2 = pow(xc * xc + yc * yc, -0.5);
 
     z(0) = xc + r * (st * yc * dn_1_2);   // xb
     z(1) = yc + r * (-st * xc * dn_1_2);  // yb
     z(2) = zc + r * ct;                   // zb
-    z(3) = xc;                            // xc
-    z(4) = yc;                            // yc
-    z(5) = zc;                            // zc
+    z(3) = theta;                         // theta
     return z;
   };
   // J_h - Jacobian of observation function
   auto j_h = [](const Eigen::VectorXd &x) {
-    Eigen::MatrixXd h(6, 9);
-    double xc = x(0), yc = x(1), r = x(6), theta = -x(7);
+    Eigen::MatrixXd h(4, 9);
+    double xc = x(0), yc = x(1), r = x(6), theta = x(7);
     double st = sin(theta), ct = cos(theta);
     double dn_1_2 = pow(xc * xc + yc * yc, -0.5);
     double dn_3_2 = pow(xc * xc + yc * yc, -1.5);
     // clang-format off
-    //    x    y    z    v_x  v_y  v_z  r           theta            omega
-    h <<  1-r*xc*yc*st*dn_3_2,   r*xc*xc*st*dn_3_2,   0,   0,   0,   0,   yc*st*dn_1_2,   yc*ct*dn_1_2,   0,
-
-          -r*yc*yc*st*dn_3_2,   1+r*xc*yc*st*dn_3_2,   0,   0,   0,   0,   xc*st*dn_1_2,   -xc*ct*dn_1_2,   0,
-
-          1,   0,   0,   0,   0,   0,   ct,   -r*st,   0,
-
-          1,   0,   0,   0,   0,   0,   0,   0,   0,
-          0,   1,   0,   0,   0,   0,   0,   0,   0,
-          0,   0,   1,   0,   0,   0,   0,   0,   0;
+    //    x                      y                      z    v_x  v_y  v_z  r                theta            omega
+    h <<  1-r*xc*yc*st*dn_3_2,   r*xc*xc*st*dn_3_2,     0,   0,   0,   0,   yc*st*dn_1_2,    yc*ct*dn_1_2,    0,
+          -r*yc*yc*st*dn_3_2,    1+r*xc*yc*st*dn_3_2,   0,   0,   0,   0,   -xc*st*dn_1_2,   -xc*ct*dn_1_2,   0,
+          0,                     0,                     1,   0,   0,   0,   ct,              -r*st,           0,
+          0,                     0,                     0,   0,   0,   0,   0,               1,               0;
     // clang-format on
     return h;
   };
@@ -103,9 +97,9 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions &options)
     double x = s2qxyz_, y = s2qxyz_, z = s2qxyz_, theta = s2qtheta_, r = s2qr_;
     double q_x_x = pow(t, 4) / 4 * x, q_x_vx = pow(t, 3) / 2 * x,
            q_vx_vx = pow(t, 2) * x;
-    double q_y_y = pow(t, 4) / 4 * y, q_y_vy = pow(t, 3) / 2 * x,
+    double q_y_y = pow(t, 4) / 4 * y, q_y_vy = pow(t, 3) / 2 * y,
            q_vy_vy = pow(t, 2) * y;
-    double q_z_z = pow(t, 4) / 4 * z, q_z_vz = pow(t, 3) / 2 * x,
+    double q_z_z = pow(t, 4) / 4 * z, q_z_vz = pow(t, 3) / 2 * z,
            q_vz_vz = pow(t, 2) * z;
     double q_r = pow(t, 4) / 4 * r;
     double q_theta = pow(t, 4) / 4 * theta;
@@ -127,11 +121,11 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions &options)
   r_blade_ = declare_parameter("ekf.r_blade", 0.02);
   r_center_ = declare_parameter("ekf.r_center", 0.02);
   auto u_r = [this](const Eigen::VectorXd &z) {
-    Eigen::DiagonalMatrix<double, 6> r;
+    Eigen::DiagonalMatrix<double, 4> r;
     double xb = r_blade_;
     double xc = r_center_;
     r.diagonal() << abs(xb * z(0)), abs(xb * z(1)), abs(xb * z(2)),
-        abs(xc * z(3)), abs(xc * z(4)), abs(xc * z(5));
+        abs(xc * z(3));
     return r;
   };
   // P - error estimate covariance matrix
@@ -214,8 +208,7 @@ void BuffTrackerNode::bladesCallback(
     rune_info_msg.blade.y = tracker_->measurement(1);
     rune_info_msg.blade.z = tracker_->measurement(2);
     rune_info_msg.center.x = tracker_->measurement(3);
-    rune_info_msg.center.y = tracker_->measurement(4);
-    rune_info_msg.center.z = tracker_->measurement(5);
+
     rune_info_publisher_->publish(rune_info_msg);
 
     if (tracker_->tracker_state == Tracker::State::DETECTING) {

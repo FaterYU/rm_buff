@@ -30,17 +30,16 @@
 
 #define PI 3.1415926
 #define BLADE_R_OFFSET 700.0
-#define OMEGA 1.0 / 3 * PI
-namespace rm_buff
-{
-class Tracker
-{
-public:
+// #define OMEGA 1.0 / 3 * PI
+#define OMEGA 0.0
+namespace rm_buff {
+class Tracker {
+ public:
   Tracker(double max_match_theta, double max_match_center_xoy);
 
-  void init(const buff_interfaces::msg::BladeArray::SharedPtr & blades_msg);
+  void init(const buff_interfaces::msg::BladeArray::SharedPtr& blades_msg);
 
-  void update(const buff_interfaces::msg::BladeArray::SharedPtr & blades_msg);
+  void update(const buff_interfaces::msg::BladeArray::SharedPtr& blades_msg);
 
   ExtendedKalmanFilter ekf;
 
@@ -72,8 +71,7 @@ public:
   //           4 <== phi = 8/5 * pi
   int blade_id;
 
-  struct blade_transform
-  {
+  struct blade_transform {
     geometry_msgs::msg::Point blade_position;
     geometry_msgs::msg::Point center_position;
     double theta;
@@ -85,18 +83,17 @@ public:
 
   Eigen::VectorXd target_state;
 
-  double norm(double theta, double min_trh, double max_trh);
+ private:
+  void initEKF(const blade_transform& blade);
 
-private:
-  void initEKF(const blade_transform & blade);
-
-  blade_transform bladeTransform(const buff_interfaces::msg::Blade & blade);
+  blade_transform bladeTransform(const buff_interfaces::msg::Blade& blade);
 
   bool handleBladeJump(double theta_diff);
 
-  geometry_msgs::msg::Point rotateBlade(const geometry_msgs::msg::Point & blade_position, int idx);
+  geometry_msgs::msg::Point rotateBlade(const blade_transform& blade, int idx);
 
-  void calculateMeasurementFromPrediction(blade_transform & blade, const Eigen::VectorXd & state);
+  void calculateMeasurementFromPrediction(blade_transform& blade,
+                                          const Eigen::VectorXd& state);
 
   double max_match_theta_;
   double max_match_center_xoy_;

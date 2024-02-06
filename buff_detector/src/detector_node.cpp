@@ -2,7 +2,7 @@
 
 namespace rm_buff {
 BuffDetectorNode::BuffDetectorNode(const rclcpp::NodeOptions& options)
-    : Node("detector_node", options) {
+    : Node("buff_detector", options) {
   blades_publisher_ = this->create_publisher<buff_interfaces::msg::BladeArray>(
       "/detector/blade_array", 10);
   debug_blades_publisher_ =
