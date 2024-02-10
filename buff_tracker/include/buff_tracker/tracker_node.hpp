@@ -16,6 +16,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <std_srvs/srv/trigger.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <visualization_msgs/msg/marker.hpp>
 
 // STD
 #include <memory>
@@ -25,18 +26,17 @@
 #include "buff_tracker/extended_kalman_filter.hpp"
 #include "buff_tracker/tracker.hpp"
 
-namespace rm_buff
-{
+namespace rm_buff {
 
 using tf2_filter = tf2_ros::MessageFilter<buff_interfaces::msg::BladeArray>;
 
-class BuffTrackerNode : public rclcpp::Node
-{
-public:
-  explicit BuffTrackerNode(const rclcpp::NodeOptions & options);
+class BuffTrackerNode : public rclcpp::Node {
+ public:
+  explicit BuffTrackerNode(const rclcpp::NodeOptions& options);
 
-private:
-  void bladesCallback(const buff_interfaces::msg::BladeArray::SharedPtr blades_msg);
+ private:
+  void bladesCallback(
+      const buff_interfaces::msg::BladeArray::SharedPtr blades_msg);
   double dt_;
 
   rclcpp::Time last_time_;
@@ -61,7 +61,16 @@ private:
 
   // Publisher
   rclcpp::Publisher<buff_interfaces::msg::Rune>::SharedPtr rune_publisher_;
-  rclcpp::Publisher<buff_interfaces::msg::RuneInfo>::SharedPtr rune_info_publisher_;
+  rclcpp::Publisher<buff_interfaces::msg::RuneInfo>::SharedPtr
+      rune_info_publisher_;
+
+  // visualization
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr
+      blade_marker_pub_;
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr
+      center_marker_pub_;
+  visualization_msgs::msg::Marker blade_marker_;
+  visualization_msgs::msg::Marker center_marker_;
 };
 }  // namespace rm_buff
 

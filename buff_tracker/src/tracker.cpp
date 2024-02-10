@@ -264,4 +264,9 @@ void Tracker::calculateMeasurementFromPrediction(blade_transform& blade,
   blade.theta = angles::normalize_angle(theta);
 }
 
+void Tracker::getTrackerPosition(blade_transform& blade) {
+  calculateMeasurementFromPrediction(blade, target_state);
+  blade.blade_position = rotateBlade(blade, blade_id);
+}
+
 }  // namespace rm_buff

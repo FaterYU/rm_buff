@@ -83,6 +83,8 @@ class Tracker {
 
   Eigen::VectorXd target_state;
 
+  void getTrackerPosition(blade_transform& blade);
+
  private:
   void initEKF(const blade_transform& blade);
 

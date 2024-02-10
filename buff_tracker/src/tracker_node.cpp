@@ -7,6 +7,7 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions &options)
   RCLCPP_INFO(this->get_logger(), "Tracker node initialized");
 
   // Parameters
+  target_frame_ = this->declare_parameter("target_frame", "odom");
   lost_time_threshold_ =
       this->declare_parameter("tracker.lost_time_threshold", 0.5);
   double max_match_theta =
@@ -24,6 +25,38 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions &options)
   tracker_->distance = this->declare_parameter("tracker.distance", 6626.0);
   tracker_->max_distance_diff =
       this->declare_parameter("tracker.max_distance_diff", 905.0);
+
+  // visulization Initialize
+  blade_marker_ = visualization_msgs::msg::Marker();
+  blade_marker_.header.frame_id = target_frame_;
+  blade_marker_.ns = "blade";
+  blade_marker_.id = 0;
+  blade_marker_.type = visualization_msgs::msg::Marker::CYLINDER;
+  blade_marker_.action = visualization_msgs::msg::Marker::ADD;
+  auto q = tf2::Quaternion();
+  q.setRPY(0, PI / 2, 0);
+  blade_marker_.pose.orientation = tf2::toMsg(q);
+  blade_marker_.scale.x = 0.3;
+  blade_marker_.scale.y = 0.3;
+  blade_marker_.scale.z = 0.01;
+  blade_marker_.color.r = 1.0;
+  blade_marker_.color.g = 0.0;
+  blade_marker_.color.b = 0.0;
+  blade_marker_.color.a = 1.0;
+
+  center_marker_ = visualization_msgs::msg::Marker();
+  center_marker_.header.frame_id = target_frame_;
+  center_marker_.ns = "center";
+  center_marker_.id = 0;
+  center_marker_.type = visualization_msgs::msg::Marker::SPHERE;
+  center_marker_.action = visualization_msgs::msg::Marker::ADD;
+  center_marker_.scale.x = 0.1;
+  center_marker_.scale.y = 0.1;
+  center_marker_.scale.z = 0.1;
+  center_marker_.color.r = 0.0;
+  center_marker_.color.g = 1.0;
+  center_marker_.color.b = 0.0;
+  center_marker_.color.a = 1.0;
 
   // EKF
   // xc = x_rune_center, xb = x_blade_center
@@ -135,9 +168,13 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions &options)
 
   // Create publishers
   rune_publisher_ =
-      this->create_publisher<buff_interfaces::msg::Rune>("/tracker/rune", 10);
+      this->create_publisher<buff_interfaces::msg::Rune>("tracker/rune", 10);
   rune_info_publisher_ = this->create_publisher<buff_interfaces::msg::RuneInfo>(
       "tracker/rune_info", 10);
+  blade_marker_pub_ = this->create_publisher<visualization_msgs::msg::Marker>(
+      "tracker/blade_marker", 10);
+  center_marker_pub_ = this->create_publisher<visualization_msgs::msg::Marker>(
+      "tracker/center_marker", 10);
 
   // Subscriber with tf2 message_filter
   // tf2 relevant
@@ -151,7 +188,6 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions &options)
   // subscriber and filter
   blades_sub_.subscribe(this, "/detector/blade_array",
                         rmw_qos_profile_sensor_data);
-  target_frame_ = this->declare_parameter("target_frame", "odom");
   tf2_filter_ = std::make_shared<tf2_filter>(
       blades_sub_, *tf2_buffer_, target_frame_, 10,
       this->get_node_logging_interface(), this->get_node_clock_interface(),
@@ -217,16 +253,32 @@ void BuffTrackerNode::bladesCallback(
                tracker_->tracker_state == Tracker::State::TEMP_LOST) {
       rune_msg.tracking = true;
       const auto &state = tracker_->target_state;
-      rune_msg.position.x = state(0);
-      rune_msg.position.y = state(1);
-      rune_msg.position.z = state(2);
+
+      // calculate from prediction
+      Tracker::blade_transform predict_blade;
+      tracker_->getTrackerPosition(predict_blade);
+
+      rune_msg.position = predict_blade.center_position;
       rune_msg.velocity.x = state(3);
       rune_msg.velocity.y = state(4);
       rune_msg.velocity.z = state(5);
       rune_msg.r = state(6);
-      rune_msg.theta = state(7);
+      rune_msg.theta = predict_blade.theta;
       rune_msg.omega = state(8);
       rune_msg.offset_id = tracker_->blade_id;
+
+      // Publish visualization
+      center_marker_.header.stamp = time;
+      center_marker_.pose.position.x = predict_blade.center_position.x;
+      center_marker_.pose.position.y = predict_blade.center_position.y;
+      center_marker_.pose.position.z = predict_blade.center_position.z;
+      center_marker_pub_->publish(center_marker_);
+
+      blade_marker_.header.stamp = time;
+      blade_marker_.pose.position.x = predict_blade.blade_position.x;
+      blade_marker_.pose.position.y = predict_blade.blade_position.y;
+      blade_marker_.pose.position.z = predict_blade.blade_position.z;
+      blade_marker_pub_->publish(blade_marker_);
     }
   }
 
