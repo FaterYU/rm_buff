@@ -234,8 +234,8 @@ geometry_msgs::msg::Point Tracker::rotateBlade(const blade_transform& blade,
   tf2::Vector3 offset(-xc, -yc, -zc);
   tf2::Vector3 blade_point(blade.blade_position.x, blade.blade_position.y,
                            blade.blade_position.z);
-  tf2::Quaternion q(cos(theta / 2), sin(theta / 2) * xc, sin(theta / 2) * yc,
-                    0);
+  tf2::Quaternion q(sin(theta / 2) * xc, sin(theta / 2) * yc, 0,
+                    cos(theta / 2));
   q.normalize();
   tf2::Vector3 rotated_blade_point = tf2::quatRotate(q, blade_point + offset);
   rotated_blade_point -= offset;

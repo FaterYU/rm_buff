@@ -6,13 +6,13 @@
 #include "math.h"
 #define PI 3.1415926
 
-void calcuateBuffPostition(
-  float xc, float yc, float zc, float theta, int blade_id, float a, float b, float w,
-  uint64_t cap_timestamp, uint16_t t_offset, float * target_x, float * target_y, float * target_z)
-{
+void calcuateBuffPostition(float xc, float yc, float zc, float theta,
+                           int blade_id, float a, float b, float w,
+                           uint64_t cap_timestamp, uint16_t t_offset,
+                           float* target_x, float* target_y, float* target_z) {
   // TODO: obtain self timestamp and set delay
-  uint64_t self_timestamp = 1234502;  //ms stamp
-  float delay = 0.3;                  //s
+  uint64_t self_timestamp = 1234502;  // ms stamp
+  float delay = 0.3;                  // s
 
   //   TODO end
 
@@ -23,15 +23,15 @@ void calcuateBuffPostition(
   if (w == 0) {
     theta += b * (t1 - t0) + blade_id * 2.0 / 5 * PI;
   } else {
-    theta += a / w * (cos(w * t0) - cos(w * t1)) + b * (t1 - t0) + blade_id * 2.0 / 5 * PI;
+    theta += a / w * (cos(w * t0) - cos(w * t1)) + b * (t1 - t0) +
+             blade_id * 2.0 / 5 * PI;
   }
-  *target_x = xc + r * (sin(theta) * yc * sqrt(pow(xc, 2) + pow(yc, 2)));
-  *target_y = yc + r * (-sin(theta) * xc * sqrt(pow(xc, 2) + pow(yc, 2)));
+  *target_x = xc + r * (sin(theta) * yc / sqrt(pow(xc, 2) + pow(yc, 2)));
+  *target_y = yc + r * (-sin(theta) * xc / sqrt(pow(xc, 2) + pow(yc, 2)));
   *target_z = zc + r * cos(theta);
 }
 
-int main()
-{
+int main() {
   // serial param propotion
   uint8_t id = 2;
   float x = 0.6626;
@@ -49,9 +49,9 @@ int main()
   float target_y;
   float target_z;
 
-  calcuateBuffPostition(
-    x, y, z, yaw, (int)id, spd_a, spd_b, spd_w, cap_timestamp, t_offset, &target_x, &target_y,
-    &target_z);
+  calcuateBuffPostition(x, y, z, yaw, (int)id, spd_a, spd_b, spd_w,
+                        cap_timestamp, t_offset, &target_x, &target_y,
+                        &target_z);
 
   printf("x: %f\ny: %f\ny: %f\n", target_x, target_y, target_z);
   return 0;
