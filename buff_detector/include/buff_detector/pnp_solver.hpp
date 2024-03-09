@@ -27,10 +27,14 @@ class PnPSolver {
   cv::Mat dist_coeffs_;
 
   // Unit: mm
-  static constexpr float BLADE_TOP_WIDTH = 323.81;
-  static constexpr float BLADE_BOTTOM_WIDTH = 332.78;
-  static constexpr float BLADE_TOP_HEIGHT = 55.76;
-  static constexpr float BLADE_BOTTOM_HEIGHT = 47.91;
+  // static constexpr float BLADE_TOP_WIDTH = 323.81;
+  // static constexpr float BLADE_BOTTOM_WIDTH = 332.78;
+  // static constexpr float BLADE_TOP_HEIGHT = 55.76;
+  // static constexpr float BLADE_BOTTOM_HEIGHT = 47.91;
+  static constexpr float BLADE_TOP_WIDTH = 319.0;
+  static constexpr float BLADE_BOTTOM_WIDTH = 372.0;
+  static constexpr float BLADE_TOP_HEIGHT = 157.0;
+  static constexpr float BLADE_BOTTOM_HEIGHT = 159.0;
   static constexpr float BLADE_RADIUS = 700.70;
 
   // Four vertices of blade in 3d

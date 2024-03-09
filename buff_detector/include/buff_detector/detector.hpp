@@ -13,25 +13,23 @@
 #define KPT_NUM 5
 #define CLS_NUM 4
 
-namespace rm_buff
-{
-class Detector
-{
-public:
+namespace rm_buff {
+class Detector {
+ public:
   // Detector();
   Detector(const std::string model_path);
   // ~Detector();
 
-  std::vector<Blade> Detect(cv::Mat & image);
+  std::vector<Blade> Detect(cv::Mat& image);
 
-  void draw_blade(cv::Mat & img);
+  void draw_blade(cv::Mat& img);
 
   // param
   double nms_threshold;
   double conf_threshold;
   double image_size;
 
-private:
+ private:
   std::string model_path_;
   std::string bin_path_;
 
@@ -46,10 +44,15 @@ private:
 
   std::vector<Blade> blade_array_;
 
-  cv::Mat letterbox(cv::Mat & src, int h, int w);
+  std::vector<cv::Point> blade_template_;
+  std::vector<cv::Point> kpt_template_;
 
-  void non_max_suppression(
-    ov::Tensor & output, float conf_thres, float iou_thres, int nc, cv::Size img_size);
+  void calibrate_kpts(Blade& blade, cv::Mat& img);
+
+  cv::Mat letterbox(cv::Mat& src, int h, int w);
+
+  void non_max_suppression(ov::Tensor& output, float conf_thres,
+                           float iou_thres, int nc, cv::Size img_size);
 
   const std::vector<std::string> class_names = {"RR", "RW", "BR", "BW"};
 };
