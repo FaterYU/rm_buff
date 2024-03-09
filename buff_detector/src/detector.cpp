@@ -197,15 +197,6 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
     dstRectP.emplace_back(vertices[i]);
   }
 
-  // draw blade
-  cv::Mat dst_img = img.clone();
-  for (size_t i = 0; i < dstRectP.size(); ++i) {
-    cv::line(dst_img, dstRectP[i], dstRectP[(i + 1) % dstRectP.size()],
-             cv::Scalar(0, 255, 0), 4);
-  }
-  cv::imshow("dst_img", dst_img);
-  cv::waitKey(1);
-
   cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC3);
   std::vector<cv::Point> blade_contour(dstRectP.begin(), dstRectP.end());
   std::vector<std::vector<cv::Point>> roi_corners = {blade_contour};
