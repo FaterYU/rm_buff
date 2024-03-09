@@ -15,16 +15,29 @@ Detector::Detector(const std::string model_path) : model_path_(model_path) {
   infer_request_ = compiled_model_.create_infer_request();
   input_tensor_ = infer_request_.get_input_tensor(0);
 
-  // [[138, 0], [25, 28], [12, 125], [5, 235], [0, 345], [155, 381], [216, 381],
-  // [371, 345], [366, 235], [359, 125], [346, 28], [233, 0]]
-  blade_template_ = {
-      cv::Point(138, 0),   cv::Point(25, 28),   cv::Point(12, 125),
-      cv::Point(5, 235),   cv::Point(0, 345),   cv::Point(155, 381),
-      cv::Point(216, 381), cv::Point(371, 345), cv::Point(366, 235),
-      cv::Point(359, 125), cv::Point(346, 28),  cv::Point(233, 0)};
+  blade_template_ = {cv::Point2f(138.0, 0.0),   cv::Point2f(25.0, 28.0),
+                     cv::Point2f(12.0, 125.0),  cv::Point2f(5.0, 235.0),
+                     cv::Point2f(0.0, 345.0),   cv::Point2f(155.0, 381.0),
+                     cv::Point2f(216.0, 381.0), cv::Point2f(371.0, 345.0),
+                     cv::Point2f(366.0, 235.0), cv::Point2f(359.0, 125.0),
+                     cv::Point2f(346.0, 28.0),  cv::Point2f(233.0, 0.0)};
 
-  kpt_template_ = {cv::Point(26, 131), cv::Point(20, 234), cv::Point(351, 234),
-                   cv::Point(345, 131)};
+  cv::Point2f center(185.0, 186.0);
+
+  // [-160.0, -225.0],[-166.0, -122.0],[165.0, -122.0],[159.0, -225.0]
+  kpt_template_ = {cv::Point2f(26.0, 131.0), cv::Point2f(20.0, 234.0),
+                   cv::Point2f(351.0, 234.0), cv::Point2f(345.0, 131.0)};
+
+  double ratio_x = 1.25;
+  double ratio_y = 1.15;
+  double move_x = 0.0;
+  double move_y = -25.0;
+  for (size_t i = 0; i < blade_template_.size(); ++i) {
+    blade_template_[i].x =
+        (blade_template_[i].x - center.x + move_x) * ratio_x + center.x;
+    blade_template_[i].y =
+        (blade_template_[i].y - center.y + move_y) * ratio_y + center.y;
+  }
 }
 
 // Detector::Detector() {}
@@ -149,14 +162,22 @@ void Detector::non_max_suppression(ov::Tensor& output, float conf_thres,
 }
 
 void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
+  for (size_t i = 0; i < blade.kpt.size(); ++i) {
+    blade.kpt[i].x = blade.kpt[i].x + (0.5 * img.cols);
+    blade.kpt[i].y = blade.kpt[i].y + (0.5 * img.rows);
+  }
   cv::Point2f center;
-  center.x = (blade.rect.x + blade.rect.width / 2) * 2 - 1;
-  center.y = (blade.rect.y + blade.rect.height / 2) * 2 - 1;
+  center.x =
+      (blade.kpt[0].x + blade.kpt[1].x + blade.kpt[3].x + blade.kpt[4].x) / 4;
+  center.y =
+      (blade.kpt[0].y + blade.kpt[1].y + blade.kpt[3].y + blade.kpt[4].y) / 4;
+
   auto orient_angle =
-      atan2(blade.kpt[2].y - center.y, blade.kpt[2].x - center.x);
-  auto rot_mat = cv::getRotationMatrix2D(center, orient_angle * 180 / M_PI, 1);
-  auto inv_rot_mat = cv::getRotationMatrix2D(center, -orient_angle * 180 / M_PI,
-                                             1);  // inverse rotation matrix
+      atan2(blade.kpt[2].y - center.y, blade.kpt[2].x - center.x) * 180 / M_PI +
+      45;
+  cv::Mat rot_mat = cv::getRotationMatrix2D(center, orient_angle, 1);
+  cv::Mat inv_rot_mat;
+  cv::invertAffineTransform(rot_mat, inv_rot_mat);
 
   std::vector<cv::Point2f> dstPoints;
   dstPoints = {blade.kpt[0], blade.kpt[1], blade.kpt[3], blade.kpt[4]};
@@ -166,23 +187,42 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
   std::vector<cv::Point2f> dstBlade;
   cv::perspectiveTransform(blade_template_, dstBlade, M);
 
-  cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC1);
-  std::vector<cv::Point> blade_contour(dstBlade.begin(), dstBlade.end());
-  std::vector<std::vector<cv::Point>> blade_contours = {blade_contour};
+  // 最小外接矩形
+  cv::RotatedRect dstRect = cv::minAreaRect(dstBlade);
 
-  cv::fillPoly(mask, blade_contours, cv::Scalar(255));
+  std::vector<cv::Point2f> dstRectP;
+  cv::Point2f vertices[4];
+  dstRect.points(vertices);
+  for (int i = 0; i < 4; i++) {
+    dstRectP.emplace_back(vertices[i]);
+  }
+
+  // draw blade
+  cv::Mat dst_img = img.clone();
+  for (size_t i = 0; i < dstRectP.size(); ++i) {
+    cv::line(dst_img, dstRectP[i], dstRectP[(i + 1) % dstRectP.size()],
+             cv::Scalar(0, 255, 0), 4);
+  }
+  cv::imshow("dst_img", dst_img);
+  cv::waitKey(1);
+
+  cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC3);
+  std::vector<cv::Point> blade_contour(dstRectP.begin(), dstRectP.end());
+  std::vector<std::vector<cv::Point>> roi_corners = {blade_contour};
+
+  cv::fillPoly(mask, roi_corners, cv::Scalar(255, 255, 255));
   cv::Mat masked_img;
-  cv::bitwise_and(img, img, masked_img, mask);
+  cv::bitwise_and(img, mask, masked_img);
 
   cv::Mat rotated_img;
-  cv::warpPerspective(masked_img, rotated_img, rot_mat, img.size());
+  cv::warpAffine(masked_img, rotated_img, rot_mat, img.size());
 
   // process the keypoints
   cv::Mat gray_rotated_img;
   cv::cvtColor(rotated_img, gray_rotated_img, cv::COLOR_BGR2GRAY);
   cv::Mat binary_rotated_img;
-  cv::threshold(gray_rotated_img, binary_rotated_img, 0, 255,
-                cv::THRESH_BINARY | cv::THRESH_OTSU);
+  cv::threshold(gray_rotated_img, binary_rotated_img, 70, 255,
+                cv::THRESH_BINARY);
 
   std::vector<std::vector<cv::Point>> contours;
   std::vector<cv::Vec4i> hierarchy;
@@ -191,8 +231,9 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
 
   std::vector<cv::Point> merged_contour;
   for (size_t i = 0; i < contours.size(); ++i) {
-    merged_contour.insert(merged_contour.end(), contours[i].begin(),
-                          contours[i].end());
+    for (size_t j = 0; j < contours[i].size(); ++j) {
+      merged_contour.emplace_back(contours[i][j]);
+    }
   }
 
   cv::Rect rect = cv::boundingRect(merged_contour);
@@ -202,7 +243,7 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
   l = rect.x;
   r = rect.x + rect.width;
 
-  std::vector<cv::Point> roi_points(4, cv::Point(0, 0));
+  std::vector<cv::Point2f> roi_points(4, cv::Point2f(0.0, 0.0));
   std::vector<int> coincidenceB(4, 0);
 
   for (auto& point : merged_contour) {
@@ -218,15 +259,28 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
     }
     if (k != -1) {
       if (coincidenceB[k] == 0) {
-        roi_points[k] = point;
+        roi_points[k] = static_cast<cv::Point2f>(point);
         coincidenceB[k] = 1;
       } else {
-        roi_points[k] = (roi_points[k] + point) / 2;
+        roi_points[k] = (roi_points[k] + static_cast<cv::Point2f>(point)) / 2;
       }
     }
   }
 
-  cv::perspectiveTransform(roi_points, blade.kpt, inv_rot_mat);
+  for (size_t i = 0; i < roi_points.size(); ++i) {
+    cv::Point2f p;
+    p.x = roi_points[i].x;
+    p.y = roi_points[i].y;
+    cv::Mat point = (cv::Mat_<double>(3, 1) << p.x, p.y, 1);
+    point = inv_rot_mat * point;
+    roi_points[i].x = point.at<double>(0) - (0.5 * img.cols);
+    roi_points[i].y = point.at<double>(1) - (0.5 * img.rows);
+  }
+
+  blade.kpt[0] = roi_points[0];
+  blade.kpt[1] = roi_points[1];
+  blade.kpt[3] = roi_points[2];
+  blade.kpt[4] = roi_points[3];
 }
 
 cv::Mat Detector::letterbox(cv::Mat& src, int h, int w) {

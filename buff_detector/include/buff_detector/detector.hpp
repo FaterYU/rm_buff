@@ -44,8 +44,8 @@ class Detector {
 
   std::vector<Blade> blade_array_;
 
-  std::vector<cv::Point> blade_template_;
-  std::vector<cv::Point> kpt_template_;
+  std::vector<cv::Point2f> blade_template_;
+  std::vector<cv::Point2f> kpt_template_;
 
   void calibrate_kpts(Blade& blade, cv::Mat& img);
 

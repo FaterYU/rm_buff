@@ -59,8 +59,8 @@ tracker_node = Node(
 def generate_launch_description():
     return LaunchDescription([
         # robot_state_publisher,
-        # detector_node,
-        tracker_node,
+        detector_node,
+        # tracker_node,
         # delay_serial_node,
     ])
 
