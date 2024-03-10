@@ -45,6 +45,7 @@ private:
   rclcpp::Publisher<buff_interfaces::msg::DebugBladeArray>::SharedPtr debug_blades_publisher_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr latency_publisher_;
   image_transport::Publisher result_img_pub_;
+  image_transport::Publisher bin_img_pub_;
 
   //   Detetor
   std::unique_ptr<Detector> detector_;

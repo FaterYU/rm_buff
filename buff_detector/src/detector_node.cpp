@@ -12,6 +12,8 @@ BuffDetectorNode::BuffDetectorNode(const rclcpp::NodeOptions& options)
       this->create_publisher<std_msgs::msg::String>("/inference/latency", 10);
   result_img_pub_ =
       image_transport::create_publisher(this, "/detector/buff_result_img");
+  bin_img_pub_ =
+      image_transport::create_publisher(this, "/detector/buff_bin_img");
 
   auto pkg_path = ament_index_cpp::get_package_share_directory("buff_detector");
   auto model_path = pkg_path + "/models/" +
@@ -25,6 +27,8 @@ BuffDetectorNode::BuffDetectorNode(const rclcpp::NodeOptions& options)
   detector_->conf_threshold =
       this->declare_parameter("detector.conf_threshold", 0.70);
   detector_->image_size = this->declare_parameter("detector.image_size", 640);
+  detector_->bin_threshold =
+      this->declare_parameter("detector.bin_threshold", 70.0);
 
   cam_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
       "/camera_info", rclcpp::SensorDataQoS(),
@@ -134,6 +138,9 @@ std::vector<Blade> BuffDetectorNode::DetectBlades(
   }
   result_img_pub_.publish(
       cv_bridge::CvImage(image_msg->header, "rgb8", img).toImageMsg());
+  
+  bin_img_pub_.publish(
+      cv_bridge::CvImage(image_msg->header, "mono8", detector_->binary_img).toImageMsg());
 
   return result;
 }

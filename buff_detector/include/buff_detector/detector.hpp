@@ -28,6 +28,10 @@ class Detector {
   double nms_threshold;
   double conf_threshold;
   double image_size;
+  double bin_threshold;
+
+  // visual
+  cv::Mat binary_img;
 
  private:
   std::string model_path_;

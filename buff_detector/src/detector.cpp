@@ -205,6 +205,11 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
   cv::Mat masked_img;
   cv::bitwise_and(img, mask, masked_img);
 
+  cv::Mat gray_img;
+  cv::cvtColor(masked_img, gray_img, cv::COLOR_BGR2GRAY);
+  cv::threshold(gray_img, binary_img, 80, 255,
+                cv::THRESH_BINARY);
+
   cv::Mat rotated_img;
   cv::warpAffine(masked_img, rotated_img, rot_mat, img.size());
 
@@ -212,7 +217,7 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
   cv::Mat gray_rotated_img;
   cv::cvtColor(rotated_img, gray_rotated_img, cv::COLOR_BGR2GRAY);
   cv::Mat binary_rotated_img;
-  cv::threshold(gray_rotated_img, binary_rotated_img, 70, 255,
+  cv::threshold(gray_rotated_img, binary_rotated_img, 80, 255,
                 cv::THRESH_BINARY);
 
   std::vector<std::vector<cv::Point>> contours;
