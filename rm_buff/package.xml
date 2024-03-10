@@ -10,7 +10,7 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>buff_interfaces</depend>
-  <depend>buffr_detector</depend>
+  <depend>buff_detector</depend>
   <depend>buff_tracker</depend>
 
   <test_depend>ament_lint_auto</test_depend>
