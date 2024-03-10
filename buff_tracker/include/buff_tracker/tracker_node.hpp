@@ -69,8 +69,11 @@ class BuffTrackerNode : public rclcpp::Node {
       blade_marker_pub_;
   rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr
       center_marker_pub_;
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr
+      measure_marker_pub_;
   visualization_msgs::msg::Marker blade_marker_;
   visualization_msgs::msg::Marker center_marker_;
+  visualization_msgs::msg::Marker measure_marker_;
 };
 }  // namespace rm_buff
 

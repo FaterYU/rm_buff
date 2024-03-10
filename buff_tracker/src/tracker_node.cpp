@@ -58,6 +58,20 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions &options)
   center_marker_.color.b = 0.0;
   center_marker_.color.a = 1.0;
 
+  measure_marker_ = visualization_msgs::msg::Marker();
+  measure_marker_.header.frame_id = target_frame_;
+  measure_marker_.ns = "measure";
+  measure_marker_.id = 0;
+  measure_marker_.type = visualization_msgs::msg::Marker::SPHERE;
+  measure_marker_.action = visualization_msgs::msg::Marker::ADD;
+  measure_marker_.scale.x = 0.1;
+  measure_marker_.scale.y = 0.1;
+  measure_marker_.scale.z = 0.1;
+  measure_marker_.color.r = 0.0;
+  measure_marker_.color.g = 0.0;
+  measure_marker_.color.b = 1.0;
+  measure_marker_.color.a = 1.0;
+
   // EKF
   // xc = x_rune_center, xb = x_blade_center
   // state: x, y, z, vx, vy, vz, r, theta, omega
@@ -117,8 +131,8 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions &options)
     return h;
   };
   // update_Q - process noise covariance matrix
-  s2qxyz_ = declare_parameter("ekf.sigma2_q_xyz", 20.0);
-  s2qtheta_ = declare_parameter("ekf.sigma2_q_theta", 100.0);
+  s2qxyz_ = declare_parameter("ekf.sigma2_q_xyz", 1e-4);
+  s2qtheta_ = declare_parameter("ekf.sigma2_q_theta", 1e-2);
   s2qr_ = declare_parameter("ekf.sigma2_q_r", 80.0);
   auto u_q = [this]() {
     Eigen::MatrixXd q(9, 9);
@@ -135,24 +149,26 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions &options)
     double q_z_z = pow(t, 4) / 4 * z, q_z_vz = pow(t, 3) / 2 * z,
            q_vz_vz = pow(t, 2) * z;
     double q_r = pow(t, 4) / 4 * r;
-    double q_theta = pow(t, 4) / 4 * theta;
+    double q_theta = pow(t, 4) / 4 * theta,
+           q_theta_omega = pow(t, 3) / 2 * theta,
+           q_omega_omega = pow(t, 2) * theta;
     // clang-format off
-    //    x       y       z       v_x     v_y     v_z     r       theta   omega
-    q <<  q_x_x,  0,      0,      q_x_vx, 0,      0,      0,      0,      0,
-          0,      q_y_y,  0,      0,      q_y_vy, 0,      0,      0,      0,
-          0,      0,      q_z_z,  0,      0,      0,      q_z_vz, 0,      0,
-          q_x_vx, 0,      0,      q_vx_vx,0,      0,      0,      0,      0,
-          0,      q_y_vy, 0,      0,      q_vy_vy,0,      0,      0,      0,
-          0,      0,      q_z_vz, 0,      0,      q_vz_vz,0,      0,      0,
-          0,      0,      0,      0,      0,      0,      q_r,    0,      0,
-          0,      0,      0,      0,      0,      0,      0,      q_theta,0,
-          0,      0,      0,      0,      0,      0,      0,      0,      0;
+    //    x       y       z       v_x     v_y     v_z     r       theta          omega
+    q <<  q_x_x,  0,      0,      q_x_vx, 0,      0,      0,      0,             0,
+          0,      q_y_y,  0,      0,      q_y_vy, 0,      0,      0,             0,
+          0,      0,      q_z_z,  0,      0,      0,      q_z_vz, 0,             0,
+          q_x_vx, 0,      0,      q_vx_vx,0,      0,      0,      0,             0,
+          0,      q_y_vy, 0,      0,      q_vy_vy,0,      0,      0,             0,
+          0,      0,      q_z_vz, 0,      0,      q_vz_vz,0,      0,             0,
+          0,      0,      0,      0,      0,      0,      q_r,    0,             0,
+          0,      0,      0,      0,      0,      0,      0,      q_theta,       q_theta_omega,
+          0,      0,      0,      0,      0,      0,      0,      q_theta_omega, q_omega_omega;
     // clang-format on
     return q;
   };
   // update_R - measurement noise covariance matrix
-  r_blade_ = declare_parameter("ekf.r_blade", 0.02);
-  r_center_ = declare_parameter("ekf.r_center", 0.02);
+  r_blade_ = declare_parameter("ekf.r_blade", 1e-8);
+  r_center_ = declare_parameter("ekf.r_center", 1e-8);
   auto u_r = [this](const Eigen::VectorXd &z) {
     Eigen::DiagonalMatrix<double, 4> r;
     double xb = r_blade_;
@@ -175,6 +191,8 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions &options)
       "tracker/blade_marker", 10);
   center_marker_pub_ = this->create_publisher<visualization_msgs::msg::Marker>(
       "tracker/center_marker", 10);
+  measure_marker_pub_ = this->create_publisher<visualization_msgs::msg::Marker>(
+      "tracker/measure_marker", 10);
 
   // Subscriber with tf2 message_filter
   // tf2 relevant
@@ -229,6 +247,14 @@ void BuffTrackerNode::bladesCallback(
   buff_interfaces::msg::Rune rune_msg;
   rune_msg.header.stamp = time;
   rune_msg.header.frame_id = target_frame_;
+
+  measure_marker_.header.stamp = time;
+  if (blades_msg->blades.size() != 0) {
+    measure_marker_.pose.position.x = blades_msg->blades[0].pose.position.x;
+    measure_marker_.pose.position.y = blades_msg->blades[0].pose.position.y;
+    measure_marker_.pose.position.z = blades_msg->blades[0].pose.position.z;
+    measure_marker_pub_->publish(measure_marker_);
+  }
 
   // Update tracker
   if (tracker_->tracker_state == Tracker::State::LOST) {

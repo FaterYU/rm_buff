@@ -76,29 +76,32 @@ void Tracker::update(
     // if (center_xoy_diff < max_match_center_xoy_) {
     is_detected = true;
     measurement = Eigen::VectorXd::Zero(4);
-    if (abs(theta_diff) > max_match_theta_) {
-      if (!handleBladeJump(theta_diff)) {
-        // use predict val to update ekf
-        // lost count plus 1
-        measurement << predict_blade.blade_position.x,
-            predict_blade.blade_position.y, predict_blade.blade_position.z,
-            predict_blade.theta;
-        is_detected = false;
-      } else {
-        // use tracked val to update ekf
-        measurement << tracked_blade.blade_position.x,
-            tracked_blade.blade_position.y, tracked_blade.blade_position.z,
-            tracked_blade.theta;
-      }
-    } else {
-      measurement << tracked_blade.blade_position.x,
-          tracked_blade.blade_position.y, tracked_blade.blade_position.z,
-          tracked_blade.theta;
-    }
+    // if (abs(theta_diff) > max_match_theta_) {
+    //   if (!handleBladeJump(theta_diff)) {
+    //     // use predict val to update ekf
+    //     // lost count plus 1
+    //     measurement << predict_blade.blade_position.x,
+    //         predict_blade.blade_position.y, predict_blade.blade_position.z,
+    //         predict_blade.theta;
+    //     is_detected = false;
+    //   } else {
+    //     // use tracked val to update ekf
+    //     measurement << tracked_blade.blade_position.x,
+    //         tracked_blade.blade_position.y, tracked_blade.blade_position.z,
+    //         tracked_blade.theta;
+    //   }
+    // } else {
+    measurement << tracked_blade.blade_position.x,
+        tracked_blade.blade_position.y, tracked_blade.blade_position.z,
+        tracked_blade.theta;
+    // }
     // transfer theta from [-pi, pi] to [-inf, inf]
     measurement(3) = last_theta_ + angles::shortest_angular_distance(
                                        last_theta_, measurement(3));
     last_theta_ = measurement(3);
+    RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"),
+                 "measurement: %f, %f, %f, %f", measurement(0), measurement(1),
+                 measurement(2), measurement(3));
     target_state = ekf.update(measurement);
     RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"), "EKF update");
     // }
@@ -172,7 +175,7 @@ void Tracker::initEKF(const blade_transform& blade) {
 bool Tracker::handleBladeJump(double theta_diff)
 // theta_diff = measurement - prediction
 {
-  for (int i = 0; i < 5; i++) {
+  for (int i = 1; i < 5; i++) {
     double new_theta_diff = theta_diff + i * 2.0 / 5 * PI;
     if (abs(angles::normalize_angle(new_theta_diff)) < max_match_theta_) {
       tracked_blade.theta =
@@ -180,7 +183,10 @@ bool Tracker::handleBladeJump(double theta_diff)
       tracked_blade.blade_position = rotateBlade(tracked_blade, i);
 
       blade_id = (blade_id + i) % 5;
-      RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"), "Blade jump");
+      RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"),
+                   "Blade jump, double check "
+                   "angle: %f, theta_diff: %f",
+                   tracked_blade.theta, new_theta_diff);
       return true;
     }
   }
@@ -207,19 +213,23 @@ Tracker::blade_transform Tracker::bladeTransform(
   blade_tf.center_position.x = center_position.x();
   blade_tf.center_position.y = center_position.y();
   blade_tf.center_position.z = center_position.z();
-  Eigen::Vector3d vector_theta_0(0, 0, 1);
-  Eigen::Vector3d vector_center_blade = blade_position - center_position;
-  double theta = acos(vector_theta_0.dot(vector_center_blade) /
-                      vector_center_blade.norm()) *
-                 ((center_position.y() * blade_position.x() -
-                   blade_position.y() * center_position.x()) > 0
-                      ? 1
-                      : -1);
+  // Eigen::Vector3d vector_theta_0(0, 0, 1);
+  // Eigen::Vector3d vector_center_blade = blade_position - center_position;
+  // double theta = acos(vector_theta_0.dot(vector_center_blade) /
+  //                     vector_center_blade.norm()) *
+  //                ((center_position.y() * blade_position.x() -
+  //                  blade_position.y() * center_position.x()) > 0
+  //                     ? 1
+  //                     : -1);
+  // get Roll
+  double roll, pitch, yaw;
+  tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
+  double theta = roll;
   // back to first detect blade theta & position
   RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"), "blade_id: %d", blade_id);
   blade_tf.theta = angles::normalize_angle(theta + blade_id * 2.0 / 5 * PI);
-  blade_tf.blade_position =
-      blade_id == 0 ? blade_pos : rotateBlade(blade_tf, blade_id);
+  blade_tf.blade_position = blade_pos;
+  blade_tf.blade_position = rotateBlade(blade_tf, blade_id);
   return blade_tf;
 }
 
@@ -266,6 +276,7 @@ void Tracker::calculateMeasurementFromPrediction(blade_transform& blade,
 
 void Tracker::getTrackerPosition(blade_transform& blade) {
   calculateMeasurementFromPrediction(blade, target_state);
+  blade.theta = angles::normalize_angle(blade.theta + blade_id * 2.0 / 5 * PI);
   blade.blade_position = rotateBlade(blade, blade_id);
 }
 

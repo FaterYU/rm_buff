@@ -239,13 +239,13 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
 
   for (auto& point : merged_contour) {
     int k = -1;
-    if (r - 1 == point.x) {
+    if (d - 1 == point.y) {
       k = 0;
-    } else if (d - 1 == point.y) {
+    } else if (r - 1 == point.x) {
       k = 1;
-    } else if (l == point.x) {
-      k = 2;
     } else if (u == point.y) {
+      k = 2;
+    } else if (l == point.x) {
       k = 3;
     }
     if (k != -1) {
