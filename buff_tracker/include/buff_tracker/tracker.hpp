@@ -92,7 +92,7 @@ class Tracker {
 
   bool handleBladeJump(double theta_diff);
 
-  geometry_msgs::msg::Point rotateBlade(const blade_transform& blade, int idx);
+  geometry_msgs::msg::Point rotateBlade(const blade_transform blade, int idx);
 
   void calculateMeasurementFromPrediction(blade_transform& blade,
                                           const Eigen::VectorXd& state);

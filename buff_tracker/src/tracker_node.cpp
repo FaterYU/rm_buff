@@ -33,9 +33,6 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions &options)
   blade_marker_.id = 0;
   blade_marker_.type = visualization_msgs::msg::Marker::CYLINDER;
   blade_marker_.action = visualization_msgs::msg::Marker::ADD;
-  auto q = tf2::Quaternion();
-  q.setRPY(0, PI / 2, 0);
-  blade_marker_.pose.orientation = tf2::toMsg(q);
   blade_marker_.scale.x = 0.3;
   blade_marker_.scale.y = 0.3;
   blade_marker_.scale.z = 0.01;
@@ -266,10 +263,12 @@ void BuffTrackerNode::bladesCallback(
     tracker_->update(blades_msg);
 
     // Publish rune
-    rune_info_msg.blade.x = tracker_->measurement(0);
-    rune_info_msg.blade.y = tracker_->measurement(1);
-    rune_info_msg.blade.z = tracker_->measurement(2);
-    rune_info_msg.center.x = tracker_->measurement(3);
+    rune_info_msg.blade.x = tracker_->tracked_blade.blade_position.x;
+    rune_info_msg.blade.y = tracker_->tracked_blade.blade_position.y;
+    rune_info_msg.blade.z = tracker_->tracked_blade.blade_position.z;
+    rune_info_msg.center.x = tracker_->tracked_blade.center_position.x;
+    rune_info_msg.center.y = tracker_->tracked_blade.center_position.y;
+    rune_info_msg.center.z = tracker_->tracked_blade.center_position.z;
 
     rune_info_publisher_->publish(rune_info_msg);
 
@@ -304,6 +303,11 @@ void BuffTrackerNode::bladesCallback(
       blade_marker_.pose.position.x = predict_blade.blade_position.x;
       blade_marker_.pose.position.y = predict_blade.blade_position.y;
       blade_marker_.pose.position.z = predict_blade.blade_position.z;
+      auto q = tf2::Quaternion();
+      q.setRPY(atan2(predict_blade.center_position.y,
+                     predict_blade.center_position.x),
+               -PI / 2, 0);
+      blade_marker_.pose.orientation = tf2::toMsg(q);
       blade_marker_pub_->publish(blade_marker_);
     }
   }
