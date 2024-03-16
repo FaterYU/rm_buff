@@ -14,6 +14,8 @@ BuffDetectorNode::BuffDetectorNode(const rclcpp::NodeOptions& options)
       image_transport::create_publisher(this, "/detector/buff_result_img");
   bin_img_pub_ =
       image_transport::create_publisher(this, "/detector/buff_bin_img");
+  debug_img_pub_ =
+      image_transport::create_publisher(this, "/debug/buff_debug_img");
 
   auto pkg_path = ament_index_cpp::get_package_share_directory("buff_detector");
   auto model_path = pkg_path + "/models/" +
@@ -138,9 +140,13 @@ std::vector<Blade> BuffDetectorNode::DetectBlades(
   }
   result_img_pub_.publish(
       cv_bridge::CvImage(image_msg->header, "rgb8", img).toImageMsg());
-  
+
   bin_img_pub_.publish(
-      cv_bridge::CvImage(image_msg->header, "mono8", detector_->binary_img).toImageMsg());
+      cv_bridge::CvImage(image_msg->header, "mono8", detector_->binary_img)
+          .toImageMsg());
+  debug_img_pub_.publish(
+      cv_bridge::CvImage(image_msg->header, "rgb8", detector_->debug_img)
+          .toImageMsg());
 
   return result;
 }

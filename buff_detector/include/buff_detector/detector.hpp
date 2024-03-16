@@ -32,6 +32,7 @@ class Detector {
 
   // visual
   cv::Mat binary_img;
+  cv::Mat debug_img;
 
  private:
   std::string model_path_;

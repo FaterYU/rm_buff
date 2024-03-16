@@ -22,16 +22,15 @@
 
 #include "buff_detector/detector.hpp"
 
-namespace rm_buff
-{
-class BuffDetectorNode : public rclcpp::Node
-{
-public:
-  explicit BuffDetectorNode(const rclcpp::NodeOptions & options);
+namespace rm_buff {
+class BuffDetectorNode : public rclcpp::Node {
+ public:
+  explicit BuffDetectorNode(const rclcpp::NodeOptions& options);
 
-private:
+ private:
   void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr msg);
-  std::vector<Blade> DetectBlades(const sensor_msgs::msg::Image::ConstSharedPtr & image_msg);
+  std::vector<Blade> DetectBlades(
+      const sensor_msgs::msg::Image::ConstSharedPtr& image_msg);
 
   // Camera info part
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr cam_info_sub_;
@@ -41,11 +40,14 @@ private:
   // PnP Solver
   std::unique_ptr<PnPSolver> pnp_solver_;
 
-  rclcpp::Publisher<buff_interfaces::msg::BladeArray>::SharedPtr blades_publisher_;
-  rclcpp::Publisher<buff_interfaces::msg::DebugBladeArray>::SharedPtr debug_blades_publisher_;
+  rclcpp::Publisher<buff_interfaces::msg::BladeArray>::SharedPtr
+      blades_publisher_;
+  rclcpp::Publisher<buff_interfaces::msg::DebugBladeArray>::SharedPtr
+      debug_blades_publisher_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr latency_publisher_;
   image_transport::Publisher result_img_pub_;
   image_transport::Publisher bin_img_pub_;
+  image_transport::Publisher debug_img_pub_;
 
   //   Detetor
   std::unique_ptr<Detector> detector_;

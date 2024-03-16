@@ -29,7 +29,7 @@ Detector::Detector(const std::string model_path) : model_path_(model_path) {
                    cv::Point2f(351.0, 234.0), cv::Point2f(345.0, 131.0)};
 
   double ratio_x = 1.25;
-  double ratio_y = 1.15;
+  double ratio_y = 1.2;
   double move_x = 0.0;
   double move_y = -25.0;
   for (size_t i = 0; i < blade_template_.size(); ++i) {
@@ -162,6 +162,7 @@ void Detector::non_max_suppression(ov::Tensor& output, float conf_thres,
 }
 
 void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
+  debug_img = img.clone();
   for (size_t i = 0; i < blade.kpt.size(); ++i) {
     blade.kpt[i].x = blade.kpt[i].x + (0.5 * img.cols);
     blade.kpt[i].y = blade.kpt[i].y + (0.5 * img.rows);
@@ -197,6 +198,11 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
     dstRectP.emplace_back(vertices[i]);
   }
 
+  for (size_t i = 0; i < dstRectP.size(); ++i) {
+    cv::line(debug_img, dstRectP[i], dstRectP[(i + 1) % 4],
+             cv::Scalar(0, 255, 0), 4);
+  }
+
   cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC3);
   std::vector<cv::Point> blade_contour(dstRectP.begin(), dstRectP.end());
   std::vector<std::vector<cv::Point>> roi_corners = {blade_contour};
@@ -207,8 +213,7 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
 
   cv::Mat gray_img;
   cv::cvtColor(masked_img, gray_img, cv::COLOR_BGR2GRAY);
-  cv::threshold(gray_img, binary_img, 80, 255,
-                cv::THRESH_BINARY);
+  cv::threshold(gray_img, binary_img, 80, 255, cv::THRESH_BINARY);
 
   cv::Mat rotated_img;
   cv::warpAffine(masked_img, rotated_img, rot_mat, img.size());
@@ -269,6 +274,8 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
     p.y = roi_points[i].y;
     cv::Mat point = (cv::Mat_<double>(3, 1) << p.x, p.y, 1);
     point = inv_rot_mat * point;
+    cv::circle(debug_img, cv::Point(point.at<double>(0), point.at<double>(1)),
+               8, cv::Scalar(0, 255, 0), -1);
     roi_points[i].x = point.at<double>(0) - (0.5 * img.cols);
     roi_points[i].y = point.at<double>(1) - (0.5 * img.rows);
   }
