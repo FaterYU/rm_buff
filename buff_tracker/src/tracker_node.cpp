@@ -190,6 +190,8 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions &options)
       "tracker/center_marker", 10);
   measure_marker_pub_ = this->create_publisher<visualization_msgs::msg::Marker>(
       "tracker/measure_marker", 10);
+  pnp_result_pub_ =
+      this->create_publisher<geometry_msgs::msg::PoseArray>("/debug/buff_pnp", 10);
 
   // Subscriber with tf2 message_filter
   // tf2 relevant
@@ -236,6 +238,7 @@ void BuffTrackerNode::bladesCallback(
                      }),
       blades_msg->blades.end());
 
+
   // Init message
   rclcpp::Time time = blades_msg->header.stamp;
   buff_interfaces::msg::RuneInfo rune_info_msg;
@@ -244,6 +247,8 @@ void BuffTrackerNode::bladesCallback(
   buff_interfaces::msg::Rune rune_msg;
   rune_msg.header.stamp = time;
   rune_msg.header.frame_id = target_frame_;
+  geometry_msgs::msg::PoseArray pnp_result_msg;
+  pnp_result_msg.header = rune_msg.header;
 
   measure_marker_.header.stamp = time;
   if (blades_msg->blades.size() != 0) {
@@ -251,6 +256,8 @@ void BuffTrackerNode::bladesCallback(
     measure_marker_.pose.position.y = blades_msg->blades[0].pose.position.y;
     measure_marker_.pose.position.z = blades_msg->blades[0].pose.position.z;
     measure_marker_pub_->publish(measure_marker_);
+    pnp_result_msg.poses.emplace_back(blades_msg->blades[0].pose);
+    pnp_result_pub_->publish(pnp_result_msg);
   }
 
   // Update tracker
@@ -276,7 +283,7 @@ void BuffTrackerNode::bladesCallback(
       rune_msg.tracking = false;
     } else if (tracker_->tracker_state == Tracker::State::TRACKING ||
                tracker_->tracker_state == Tracker::State::TEMP_LOST) {
-      rune_msg.tracking = true;
+      rune_msg.tracking = tracker_->center_xoy_diff < tracker_->max_distance_diff;
       const auto &state = tracker_->target_state;
 
       // calculate from prediction
@@ -284,6 +291,11 @@ void BuffTrackerNode::bladesCallback(
       tracker_->getTrackerPosition(predict_blade);
 
       rune_msg.position = predict_blade.center_position;
+      // double dyaw = 0.16;
+      // double dist = 8.0;
+      // rune_msg.position.x = cos(dyaw) * dist;
+      // rune_msg.position.y = sin(dyaw) * dist;
+      // rune_msg.position.z = 2.3;
       rune_msg.velocity.x = state(3);
       rune_msg.velocity.y = state(4);
       rune_msg.velocity.z = state(5);

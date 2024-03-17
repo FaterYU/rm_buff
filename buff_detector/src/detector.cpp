@@ -28,10 +28,10 @@ Detector::Detector(const std::string model_path) : model_path_(model_path) {
   kpt_template_ = {cv::Point2f(26.0, 131.0), cv::Point2f(20.0, 234.0),
                    cv::Point2f(351.0, 234.0), cv::Point2f(345.0, 131.0)};
 
-  double ratio_x = 1.25;
+  double ratio_x = 1.35;
   double ratio_y = 1.2;
   double move_x = 0.0;
-  double move_y = -25.0;
+  double move_y = -20.0;
   for (size_t i = 0; i < blade_template_.size(); ++i) {
     blade_template_[i].x =
         (blade_template_[i].x - center.x + move_x) * ratio_x + center.x;
@@ -129,11 +129,9 @@ void Detector::non_max_suppression(ov::Tensor& output, float conf_thres,
       for (int k = 0; k < KPT_NUM; k++) {
         cv::Point2f kpt;
         kpt.x = (data[offset + 4 + nc + k * 2] - padd_w_) /
-                    (image_size - 2 * padd_w_) * img_size.width -
-                img_size.width / 2;
+                    (image_size - 2 * padd_w_) * img_size.width;
         kpt.y = (data[offset + 4 + nc + k * 2 + 1] - padd_h_) /
-                    (image_size - 2 * padd_h_) * img_size.height -
-                img_size.height / 2;
+                    (image_size - 2 * padd_h_) * img_size.height;
         kpts.emplace_back(kpt);
       }
       kpts_list.emplace_back(kpts);
@@ -147,11 +145,13 @@ void Detector::non_max_suppression(ov::Tensor& output, float conf_thres,
   for (size_t i = 0; i < picked.size(); ++i) {
     Blade blade;
     int idx = picked[i];
-    auto x = float(boxes[idx].x - padd_w_) / (image_size - 2 * padd_w_);
-    auto y = float(boxes[idx].y - padd_h_) / (image_size - 2 * padd_h_);
-    auto width = float(boxes[idx].width) / image_size;
-    auto height = float(boxes[idx].height) / image_size;
-    blade.rect = cv::Rect(x, y, width, height);
+    auto x = float(boxes[idx].x - padd_w_) / (image_size - 2 * padd_w_) *
+             img_size.width;
+    auto y = float(boxes[idx].y - padd_h_) / (image_size - 2 * padd_h_) *
+             img_size.height;
+    auto width = float(boxes[idx].width) / image_size * img_size.width;
+    auto height = float(boxes[idx].height) / image_size * img_size.height;
+    blade.rect = cv::Rect(x - (width / 2), y - (height / 2), width, height);
     blade.label = classIds[idx];
     blade.prob = confidences[idx];
     blade.kpt = kpts_list[idx];
@@ -163,19 +163,17 @@ void Detector::non_max_suppression(ov::Tensor& output, float conf_thres,
 
 void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
   debug_img = img.clone();
-  for (size_t i = 0; i < blade.kpt.size(); ++i) {
-    blade.kpt[i].x = blade.kpt[i].x + (0.5 * img.cols);
-    blade.kpt[i].y = blade.kpt[i].y + (0.5 * img.rows);
-  }
-  cv::Point2f center;
-  center.x =
-      (blade.kpt[0].x + blade.kpt[1].x + blade.kpt[3].x + blade.kpt[4].x) / 4;
-  center.y =
-      (blade.kpt[0].y + blade.kpt[1].y + blade.kpt[3].y + blade.kpt[4].y) / 4;
+  // cv::rectangle(debug_img, blade.rect, cv::Scalar(0, 255, 0), 4);
 
-  auto orient_angle =
-      atan2(blade.kpt[2].y - center.y, blade.kpt[2].x - center.x) * 180 / M_PI +
-      45;
+  cv::Point2f outP, inP, center;
+  outP.x = (blade.kpt[0].x + blade.kpt[4].x) / 2;
+  outP.y = (blade.kpt[0].y + blade.kpt[4].y) / 2;
+  inP.x = (blade.kpt[1].x + blade.kpt[3].x) / 2;
+  inP.y = (blade.kpt[1].y + blade.kpt[3].y) / 2;
+  center.x = (outP.x + inP.x) / 2;
+  center.y = (outP.y + inP.y) / 2;
+
+  auto orient_angle = atan2(inP.y - outP.y, inP.x - outP.x) * 180 / M_PI + 45;
   cv::Mat rot_mat = cv::getRotationMatrix2D(center, orient_angle, 1);
   cv::Mat inv_rot_mat;
   cv::invertAffineTransform(rot_mat, inv_rot_mat);
@@ -213,7 +211,11 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
 
   cv::Mat gray_img;
   cv::cvtColor(masked_img, gray_img, cv::COLOR_BGR2GRAY);
-  cv::threshold(gray_img, binary_img, 80, 255, cv::THRESH_BINARY);
+  cv::threshold(gray_img, binary_img, bin_threshold, 255, cv::THRESH_BINARY);
+    // dilate
+  cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
+  cv::dilate(binary_img, binary_img, element);
+
 
   cv::Mat rotated_img;
   cv::warpAffine(masked_img, rotated_img, rot_mat, img.size());
@@ -222,8 +224,11 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
   cv::Mat gray_rotated_img;
   cv::cvtColor(rotated_img, gray_rotated_img, cv::COLOR_BGR2GRAY);
   cv::Mat binary_rotated_img;
-  cv::threshold(gray_rotated_img, binary_rotated_img, 80, 255,
+  cv::threshold(gray_rotated_img, binary_rotated_img, bin_threshold, 255,
                 cv::THRESH_BINARY);
+                  // dilate
+  cv::dilate(binary_rotated_img, binary_rotated_img, element);
+
 
   std::vector<std::vector<cv::Point>> contours;
   std::vector<cv::Vec4i> hierarchy;
@@ -276,8 +281,8 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
     point = inv_rot_mat * point;
     cv::circle(debug_img, cv::Point(point.at<double>(0), point.at<double>(1)),
                8, cv::Scalar(0, 255, 0), -1);
-    roi_points[i].x = point.at<double>(0) - (0.5 * img.cols);
-    roi_points[i].y = point.at<double>(1) - (0.5 * img.rows);
+    roi_points[i].x = point.at<double>(0);
+    roi_points[i].y = point.at<double>(1);
   }
 
   blade.kpt[0] = roi_points[0];
@@ -319,16 +324,16 @@ void Detector::draw_blade(cv::Mat& img) {
     int kpt_idx[4] = {0, 1, 3, 4};
     for (int j = 0; j < 2; j++) {
       auto kpt_start =
-          cv::Point(blade_array_[i].kpt[kpt_idx[j]].x + (0.5 * img.cols),
-                    blade_array_[i].kpt[kpt_idx[j]].y + (0.5 * img.rows));
+          cv::Point(blade_array_[i].kpt[kpt_idx[j]].x,
+                    blade_array_[i].kpt[kpt_idx[j]].y);
       auto kpt_end =
-          cv::Point(blade_array_[i].kpt[kpt_idx[j + 2]].x + (0.5 * img.cols),
-                    blade_array_[i].kpt[kpt_idx[j + 2]].y + (0.5 * img.rows));
+          cv::Point(blade_array_[i].kpt[kpt_idx[j + 2]].x,
+                    blade_array_[i].kpt[kpt_idx[j + 2]].y);
       cv::line(img, kpt_start, kpt_end, cv::Scalar(0, 255, 0), 4);
     }
     cv::circle(img,
-               cv::Point(blade_array_[i].kpt[2].x + (0.5 * img.cols),
-                         blade_array_[i].kpt[2].y + (0.5 * img.rows)),
+               cv::Point(blade_array_[i].kpt[2].x,
+                         blade_array_[i].kpt[2].y),
                8, cv::Scalar(255, 0, 0), -1);
   }
 }

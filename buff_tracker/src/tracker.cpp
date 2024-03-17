@@ -47,7 +47,7 @@ void Tracker::update(
   calculateMeasurementFromPrediction(predict_blade, ekf_prediction);
 
   double theta_diff = 0.0;
-  double center_xoy_diff = 0.0;
+  center_xoy_diff = 0.0;
 
   if (!blades_msg->blades.empty()) {
     // sort blades by prob
@@ -74,6 +74,8 @@ void Tracker::update(
                  "theta_diff: %f, center_xoy_diff: %f", theta_diff,
                  center_xoy_diff);
     // if (center_xoy_diff < max_match_center_xoy_) {
+    //   detect_count_ = detect_count_ - 1 ? detect_count_ : 0;
+    // }
     is_detected = true;
     measurement = Eigen::VectorXd::Zero(4);
     if (abs(theta_diff) > max_match_theta_) {

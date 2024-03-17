@@ -52,6 +52,7 @@ class Tracker {
   double robot_z_ground;
   double distance;
   double max_distance_diff;
+  double center_xoy_diff;
 
   enum State {
     LOST,
