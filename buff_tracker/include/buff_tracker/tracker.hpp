@@ -27,21 +27,31 @@
 #include <string>
 
 #include "buff_tracker/extended_kalman_filter.hpp"
+#include "buff_tracker/gauss_newton_solver.hpp"
 
 #define PI 3.1415926
 #define BLADE_R_OFFSET 700.0
 // #define OMEGA 1.0 / 3 * PI
 #define OMEGA 0.0
-namespace rm_buff {
-class Tracker {
- public:
+namespace rm_buff
+{
+class Tracker
+{
+public:
   Tracker(double max_match_theta, double max_match_center_xoy);
 
-  void init(const buff_interfaces::msg::BladeArray::SharedPtr& blades_msg);
+  void init(const buff_interfaces::msg::BladeArray::SharedPtr & blades_msg);
 
-  void update(const buff_interfaces::msg::BladeArray::SharedPtr& blades_msg);
+  void update(const buff_interfaces::msg::BladeArray::SharedPtr & blades_msg);
+
+  void solve(const rclcpp::Time & time);
 
   ExtendedKalmanFilter ekf;
+
+  GaussNewtonSolver gns;
+
+  double a_start, w_start, c_start;
+  double min_first_solve_time;
 
   int tracking_threshold;
   int lost_threshold;
@@ -62,6 +72,13 @@ class Tracker {
     TEMP_LOST,
   } tracker_state;
 
+  enum SolverStatus {
+    WAITING,
+    NOT_ENOUGH_OBS,
+    VALID,
+    INVALID,
+  } solver_status;
+
   // blade info
   // first TRACKING blade set to blade_id = 0
   // diff with blade_0: phi
@@ -72,7 +89,8 @@ class Tracker {
   //           4 <== phi = 8/5 * pi
   int blade_id;
 
-  struct blade_transform {
+  struct blade_transform
+  {
     geometry_msgs::msg::Point blade_position;
     geometry_msgs::msg::Point center_position;
     double theta;
@@ -84,19 +102,20 @@ class Tracker {
 
   Eigen::VectorXd target_state;
 
-  void getTrackerPosition(blade_transform& blade);
+  Eigen::VectorXd spd_state;
 
- private:
-  void initEKF(const blade_transform& blade);
+  void getTrackerPosition(blade_transform & blade);
 
-  blade_transform bladeTransform(const buff_interfaces::msg::Blade& blade);
+private:
+  void initEKF(const blade_transform & blade);
+
+  blade_transform bladeTransform(const buff_interfaces::msg::Blade & blade);
 
   bool handleBladeJump(double theta_diff);
 
   geometry_msgs::msg::Point rotateBlade(const blade_transform blade, int idx);
 
-  void calculateMeasurementFromPrediction(blade_transform& blade,
-                                          const Eigen::VectorXd& state);
+  void calculateMeasurementFromPrediction(blade_transform & blade, const Eigen::VectorXd & state);
 
   double max_match_theta_;
   double max_match_center_xoy_;
@@ -104,6 +123,8 @@ class Tracker {
   int detect_count_;
   int lost_count_;
   int timeout_count_;  // ms
+
+  rclcpp::Time obs_start_time_;
 
   double last_theta_;
 };

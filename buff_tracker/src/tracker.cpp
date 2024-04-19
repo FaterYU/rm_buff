@@ -1,17 +1,21 @@
 #include "buff_tracker/tracker.hpp"
 
-namespace rm_buff {
+namespace rm_buff
+{
 
 Tracker::Tracker(double max_match_theta, double max_match_center_xoy)
-    : tracker_state(LOST),
-      blade_id(0),
-      measurement(Eigen::VectorXd::Zero(4)),
-      target_state(Eigen::VectorXd::Zero(9)),
-      max_match_theta_(max_match_theta),
-      max_match_center_xoy_(max_match_center_xoy) {}
+: tracker_state(LOST),
+  blade_id(0),
+  measurement(Eigen::VectorXd::Zero(4)),
+  target_state(Eigen::VectorXd::Zero(9)),
+  spd_state(Eigen::VectorXd::Zero(3)),
+  max_match_theta_(max_match_theta),
+  max_match_center_xoy_(max_match_center_xoy)
+{
+}
 
-void Tracker::init(
-    const buff_interfaces::msg::BladeArray::SharedPtr& blades_msg) {
+void Tracker::init(const buff_interfaces::msg::BladeArray::SharedPtr & blades_msg)
+{
   if (blades_msg->blades.empty()) {
     tracker_state = LOST;
     return;
@@ -19,9 +23,10 @@ void Tracker::init(
 
   // sort blades by prob
   std::sort(
-      blades_msg->blades.begin(), blades_msg->blades.end(),
-      [](const buff_interfaces::msg::Blade& a,
-         const buff_interfaces::msg::Blade& b) { return a.prob > b.prob; });
+    blades_msg->blades.begin(), blades_msg->blades.end(),
+    [](const buff_interfaces::msg::Blade & a, const buff_interfaces::msg::Blade & b) {
+      return a.prob > b.prob;
+    });
 
   last_theta_ = 0.0;
   // retain top 1 blade with transform
@@ -34,10 +39,12 @@ void Tracker::init(
   blade_id = 0;
   tracker_state = DETECTING;
   detect_count_ = 0;
+
+  solver_status = WAITING;
 }
 
-void Tracker::update(
-    const buff_interfaces::msg::BladeArray::SharedPtr& blades_msg) {
+void Tracker::update(const buff_interfaces::msg::BladeArray::SharedPtr & blades_msg)
+{
   Eigen::VectorXd ekf_prediction = ekf.predict();
   RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"), "EKF predict");
 
@@ -52,27 +59,25 @@ void Tracker::update(
   if (!blades_msg->blades.empty()) {
     // sort blades by prob
     std::sort(
-        blades_msg->blades.begin(), blades_msg->blades.end(),
-        [](const buff_interfaces::msg::Blade& a,
-           const buff_interfaces::msg::Blade& b) { return a.prob > b.prob; });
+      blades_msg->blades.begin(), blades_msg->blades.end(),
+      [](const buff_interfaces::msg::Blade & a, const buff_interfaces::msg::Blade & b) {
+        return a.prob > b.prob;
+      });
 
     // retain top 1 blade with transform
     tracked_blade = bladeTransform(blades_msg->blades[0]);
 
-    theta_diff = angles::shortest_angular_distance(predict_blade.theta,
-                                                   tracked_blade.theta);
+    theta_diff = angles::shortest_angular_distance(predict_blade.theta, tracked_blade.theta);
     center_xoy_diff = sqrt(
-        pow(tracked_blade.center_position.x - predict_blade.center_position.x,
-            2) +
-        pow(tracked_blade.center_position.y - predict_blade.center_position.y,
-            2));
+      pow(tracked_blade.center_position.x - predict_blade.center_position.x, 2) +
+      pow(tracked_blade.center_position.y - predict_blade.center_position.y, 2));
 
-    RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"),
-                 "tracked_blade.theta: %f, predict_blade.theta: %f",
-                 tracked_blade.theta, predict_blade.theta);
-    RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"),
-                 "theta_diff: %f, center_xoy_diff: %f", theta_diff,
-                 center_xoy_diff);
+    RCLCPP_DEBUG(
+      rclcpp::get_logger("buff_tracker"), "tracked_blade.theta: %f, predict_blade.theta: %f",
+      tracked_blade.theta, predict_blade.theta);
+    RCLCPP_DEBUG(
+      rclcpp::get_logger("buff_tracker"), "theta_diff: %f, center_xoy_diff: %f", theta_diff,
+      center_xoy_diff);
     // if (center_xoy_diff < max_match_center_xoy_) {
     //   detect_count_ = detect_count_ - 1 ? detect_count_ : 0;
     // }
@@ -82,28 +87,24 @@ void Tracker::update(
       if (!handleBladeJump(theta_diff)) {
         // use predict val to update ekf
         // lost count plus 1
-        measurement << predict_blade.blade_position.x,
-            predict_blade.blade_position.y, predict_blade.blade_position.z,
-            predict_blade.theta;
+        measurement << predict_blade.blade_position.x, predict_blade.blade_position.y,
+          predict_blade.blade_position.z, predict_blade.theta;
         is_detected = false;
       } else {
         // use tracked val to update ekf
-        measurement << tracked_blade.blade_position.x,
-            tracked_blade.blade_position.y, tracked_blade.blade_position.z,
-            tracked_blade.theta;
+        measurement << tracked_blade.blade_position.x, tracked_blade.blade_position.y,
+          tracked_blade.blade_position.z, tracked_blade.theta;
       }
     } else {
-      measurement << tracked_blade.blade_position.x,
-          tracked_blade.blade_position.y, tracked_blade.blade_position.z,
-          tracked_blade.theta;
+      measurement << tracked_blade.blade_position.x, tracked_blade.blade_position.y,
+        tracked_blade.blade_position.z, tracked_blade.theta;
     }
     // transfer theta from [-pi, pi] to [-inf, inf]
-    measurement(3) = last_theta_ + angles::shortest_angular_distance(
-                                       last_theta_, measurement(3));
+    measurement(3) = last_theta_ + angles::shortest_angular_distance(last_theta_, measurement(3));
     last_theta_ = measurement(3);
-    RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"),
-                 "measurement: %f, %f, %f, %f", measurement(0), measurement(1),
-                 measurement(2), measurement(3));
+    RCLCPP_DEBUG(
+      rclcpp::get_logger("buff_tracker"), "measurement: %f, %f, %f, %f", measurement(0),
+      measurement(1), measurement(2), measurement(3));
     target_state = ekf.update(measurement);
     RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"), "EKF update");
     // }
@@ -157,11 +158,54 @@ void Tracker::update(
       tracker_state = TRACKING;
     }
   }
-  RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"), "Tracker state: %d",
-               tracker_state);
+  RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"), "Tracker state: %d", tracker_state);
 }
 
-void Tracker::initEKF(const blade_transform& blade) {
+void Tracker::solve(const rclcpp::Time & time)
+{
+  if (tracker_state == DETECTING) {
+    solver_status = WAITING;
+    return;
+  } else if (tracker_state == TRACKING && solver_status == WAITING) {
+    // first frame
+    solver_status = NOT_ENOUGH_OBS;
+    obs_start_time_ = time;
+    Eigen::VectorXd x0 = Eigen::VectorXd::Zero(3);
+    x0 << a_start, w_start, c_start;
+    gns.setStartValue(x0);
+    spd_state = Eigen::VectorXd::Zero(3);
+  } else if (tracker_state == TRACKING) {
+    double dt = (time - obs_start_time_).seconds();
+    double spd = abs(target_state(8));
+
+    gns.addObservation(dt, spd);
+
+    if (dt > min_first_solve_time) {
+      int fail_count = 0;
+      while (gns.solve() != GaussNewtonSolver::SUCCESS) {
+        Eigen::VectorXd xn = gns.getState();
+        xn(2) += 0.5;
+        if (xn(2) > 8) {
+          xn(2) -= 8;
+        }
+        gns.setStartValue(xn);
+        fail_count++;
+        if (fail_count > 20) {
+          RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"), "Fail to solve");
+          solver_status = INVALID;
+          return;
+        }
+      }
+      solver_status = VALID;
+      spd_state = gns.getState();
+    } else {
+      solver_status = NOT_ENOUGH_OBS;
+    }
+  }
+}
+
+void Tracker::initEKF(const blade_transform & blade)
+{
   double xc = blade.center_position.x;
   double yc = blade.center_position.y;
   // double zc = (blade_z_ground - robot_z_ground) / 1000;
@@ -180,25 +224,24 @@ bool Tracker::handleBladeJump(double theta_diff)
   for (int i = 1; i < 5; i++) {
     double new_theta_diff = theta_diff + i * 2.0 / 5 * PI;
     if (abs(angles::normalize_angle(new_theta_diff)) < max_match_theta_) {
-      tracked_blade.theta =
-          angles::normalize_angle(tracked_blade.theta + i * 2.0 / 5 * PI);
+      tracked_blade.theta = angles::normalize_angle(tracked_blade.theta + i * 2.0 / 5 * PI);
       tracked_blade.blade_position = rotateBlade(tracked_blade, i);
 
       blade_id = (blade_id + i) % 5;
-      RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"),
-                   "Blade jump, double check "
-                   "angle: %f, theta_diff: %f",
-                   tracked_blade.theta, new_theta_diff);
+      RCLCPP_DEBUG(
+        rclcpp::get_logger("buff_tracker"),
+        "Blade jump, double check "
+        "angle: %f, theta_diff: %f",
+        tracked_blade.theta, new_theta_diff);
       return true;
     }
   }
-  RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"),
-               "Blade jump to illegal angle, use predict");
+  RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"), "Blade jump to illegal angle, use predict");
   return false;
 }
 
-Tracker::blade_transform Tracker::bladeTransform(
-    const buff_interfaces::msg::Blade& blade) {
+Tracker::blade_transform Tracker::bladeTransform(const buff_interfaces::msg::Blade & blade)
+{
   blade_transform blade_tf;
   geometry_msgs::msg::Point blade_pos = blade.pose.position;
   tf2::Quaternion q;
@@ -206,10 +249,8 @@ Tracker::blade_transform Tracker::bladeTransform(
   // rotate [0,0,-BLADE_R_OFFSET/1000] by q
   tf2::Vector3 offset(0, 0, -BLADE_R_OFFSET / 1000);
   tf2::Vector3 offset_rotated = tf2::quatRotate(q, offset);
-  Eigen::Vector3d blade_position =
-      Eigen::Vector3d(blade_pos.x, blade_pos.y, blade_pos.z);
-  Eigen::Vector3d offset_rotated_eigen(offset_rotated.x(), offset_rotated.y(),
-                                       offset_rotated.z());
+  Eigen::Vector3d blade_position = Eigen::Vector3d(blade_pos.x, blade_pos.y, blade_pos.z);
+  Eigen::Vector3d offset_rotated_eigen(offset_rotated.x(), offset_rotated.y(), offset_rotated.z());
   Eigen::Vector3d center_position = blade_position + offset_rotated_eigen;
   blade_tf.center_position = geometry_msgs::msg::Point();
   blade_tf.center_position.x = center_position.x();
@@ -235,8 +276,8 @@ Tracker::blade_transform Tracker::bladeTransform(
   return blade_tf;
 }
 
-geometry_msgs::msg::Point Tracker::rotateBlade(const blade_transform blade,
-                                               int idx) {
+geometry_msgs::msg::Point Tracker::rotateBlade(const blade_transform blade, int idx)
+{
   geometry_msgs::msg::Point rotated_blade_position;
   double theta = idx * 2.0 / 5 * PI;
   double xc, yc, zc;
@@ -244,11 +285,10 @@ geometry_msgs::msg::Point Tracker::rotateBlade(const blade_transform blade,
   yc = blade.center_position.y;
   zc = blade.center_position.z;
   tf2::Vector3 offset(-xc, -yc, -zc);
-  tf2::Vector3 blade_point(blade.blade_position.x, blade.blade_position.y,
-                           blade.blade_position.z);
-  tf2::Quaternion q(sin(theta / 2) * xc * pow(pow(xc, 2) + pow(yc, 2), -0.5),
-                    sin(theta / 2) * yc * pow(pow(xc, 2) + pow(yc, 2), -0.5), 0,
-                    cos(theta / 2));
+  tf2::Vector3 blade_point(blade.blade_position.x, blade.blade_position.y, blade.blade_position.z);
+  tf2::Quaternion q(
+    sin(theta / 2) * xc * pow(pow(xc, 2) + pow(yc, 2), -0.5),
+    sin(theta / 2) * yc * pow(pow(xc, 2) + pow(yc, 2), -0.5), 0, cos(theta / 2));
   q.normalize();
   tf2::Vector3 rotated_blade_point = tf2::quatRotate(q, blade_point + offset);
   rotated_blade_point -= offset;
@@ -258,18 +298,17 @@ geometry_msgs::msg::Point Tracker::rotateBlade(const blade_transform blade,
   return rotated_blade_position;
 }
 
-void Tracker::calculateMeasurementFromPrediction(blade_transform& blade,
-                                                 const Eigen::VectorXd& state) {
+void Tracker::calculateMeasurementFromPrediction(
+  blade_transform & blade, const Eigen::VectorXd & state)
+{
   double xc = state(0);
   double yc = state(1);
   double zc = state(2);
   double r = state(6);
   double theta = state(7);
 
-  blade.blade_position.x =
-      xc + r * (sin(theta) * yc * pow(pow(xc, 2) + pow(yc, 2), -0.5));
-  blade.blade_position.y =
-      yc + r * (-sin(theta) * xc * pow(pow(xc, 2) + pow(yc, 2), -0.5));
+  blade.blade_position.x = xc + r * (sin(theta) * yc * pow(pow(xc, 2) + pow(yc, 2), -0.5));
+  blade.blade_position.y = yc + r * (-sin(theta) * xc * pow(pow(xc, 2) + pow(yc, 2), -0.5));
   blade.blade_position.z = zc + r * cos(theta);
   blade.center_position.x = xc;
   blade.center_position.y = yc;
@@ -277,7 +316,8 @@ void Tracker::calculateMeasurementFromPrediction(blade_transform& blade,
   blade.theta = angles::normalize_angle(theta);
 }
 
-void Tracker::getTrackerPosition(blade_transform& blade) {
+void Tracker::getTrackerPosition(blade_transform & blade)
+{
   calculateMeasurementFromPrediction(blade, target_state);
   blade.theta = angles::normalize_angle(blade.theta - blade_id * 2.0 / 5 * PI);
   blade.blade_position = rotateBlade(blade, -blade_id);
