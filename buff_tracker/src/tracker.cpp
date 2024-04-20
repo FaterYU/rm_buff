@@ -102,9 +102,6 @@ void Tracker::update(const buff_interfaces::msg::BladeArray::SharedPtr & blades_
     // transfer theta from [-pi, pi] to [-inf, inf]
     measurement(3) = last_theta_ + angles::shortest_angular_distance(last_theta_, measurement(3));
     last_theta_ = measurement(3);
-    RCLCPP_DEBUG(
-      rclcpp::get_logger("buff_tracker"), "measurement: %f, %f, %f, %f", measurement(0),
-      measurement(1), measurement(2), measurement(3));
     target_state = ekf.update(measurement);
     RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"), "EKF update");
     // }
@@ -158,7 +155,6 @@ void Tracker::update(const buff_interfaces::msg::BladeArray::SharedPtr & blades_
       tracker_state = TRACKING;
     }
   }
-  RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"), "Tracker state: %d", tracker_state);
 }
 
 void Tracker::solve(const rclcpp::Time & time)
@@ -191,7 +187,7 @@ void Tracker::solve(const rclcpp::Time & time)
         gns.setStartValue(xn);
         fail_count++;
         if (fail_count > 20) {
-          RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"), "Fail to solve");
+          RCLCPP_WARN(rclcpp::get_logger("buff_tracker"), "Fail to solve");
           solver_status = INVALID;
           return;
         }
@@ -228,11 +224,6 @@ bool Tracker::handleBladeJump(double theta_diff)
       tracked_blade.blade_position = rotateBlade(tracked_blade, i);
 
       blade_id = (blade_id + i) % 5;
-      RCLCPP_DEBUG(
-        rclcpp::get_logger("buff_tracker"),
-        "Blade jump, double check "
-        "angle: %f, theta_diff: %f",
-        tracked_blade.theta, new_theta_diff);
       return true;
     }
   }
@@ -269,7 +260,6 @@ Tracker::blade_transform Tracker::bladeTransform(const buff_interfaces::msg::Bla
   tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
   double theta = roll;
   // back to first detect blade theta & position
-  RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"), "blade_id: %d", blade_id);
   blade_tf.theta = angles::normalize_angle(theta + blade_id * 2.0 / 5 * PI);
   blade_tf.blade_position = blade_pos;
   blade_tf.blade_position = rotateBlade(blade_tf, blade_id);

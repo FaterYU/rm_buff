@@ -347,9 +347,14 @@ void BuffTrackerNode::bladesCallback(const buff_interfaces::msg::BladeArray::Sha
         rune_msg.c = 0.0;
         rune_msg.b = state(8);
       } else if (task_mode_ == "large_buff") {
+        const auto & gns_state = tracker_->spd_state;
+        int sign = state(8) > 0 ? 1 : -1;
         if (tracker_->solver_status == Tracker::SolverStatus::VALID) {
-          const auto & gns_state = tracker_->gns.getState();
-          int sign = state(8) > 0 ? 1 : -1;
+          rune_msg.a = gns_state(0) * sign;
+          rune_msg.w = gns_state(1);
+          rune_msg.c = gns_state(2);
+          rune_msg.b = (2.09 - gns_state(0)) * sign;
+        } else if (tracker_->solver_status == Tracker::SolverStatus::INVALID) {
           rune_msg.a = gns_state(0) * sign;
           rune_msg.w = gns_state(1);
           rune_msg.c = gns_state(2);
