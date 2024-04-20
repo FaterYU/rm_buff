@@ -368,6 +368,8 @@ void BuffTrackerNode::bladesCallback(const buff_interfaces::msg::BladeArray::Sha
           rune_msg.b = state(8);
         }
       }
+      rune_info_msg.predicted_speed =
+        rune_msg.a * sin(rune_msg.w * time.seconds() + rune_msg.c) + rune_msg.b;
       rune_msg.offset_id = tracker_->blade_id;
 
       // Publish visualization
