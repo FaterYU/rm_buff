@@ -165,13 +165,15 @@ void Tracker::solve(const rclcpp::Time & time)
   } else if (tracker_state == TRACKING && solver_status == WAITING) {
     // first frame
     solver_status = NOT_ENOUGH_OBS;
-    obs_start_time_ = time;
+    obs_start_time = time;
     Eigen::VectorXd x0 = Eigen::VectorXd::Zero(3);
     x0 << a_start, w_start, c_start;
     gns.setStartValue(x0);
     spd_state = Eigen::VectorXd::Zero(3);
+
+    ekf_gns.setInitState(x0);
   } else if (tracker_state == TRACKING) {
-    double dt = (time - obs_start_time_).seconds();
+    double dt = (time - obs_start_time).seconds();
     double spd = abs(target_state(8));
 
     gns.addObservation(dt, spd);
@@ -189,11 +191,14 @@ void Tracker::solve(const rclcpp::Time & time)
         if (fail_count > 20) {
           RCLCPP_WARN(rclcpp::get_logger("buff_tracker"), "Fail to solve");
           solver_status = INVALID;
+          spd_state = ekf_gns.predict();
           return;
         }
       }
+      ekf_gns.predict();
       solver_status = VALID;
-      spd_state = gns.getState();
+      auto gns_state = gns.getState();
+      spd_state = ekf_gns.update(gns_state);
       spd_state(2) = angles::normalize_angle_positive(spd_state(2));
     } else {
       solver_status = NOT_ENOUGH_OBS;

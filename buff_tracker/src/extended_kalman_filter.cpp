@@ -1,34 +1,39 @@
 #include "buff_tracker/extended_kalman_filter.hpp"
 
-namespace rm_buff {
+namespace rm_buff
+{
 ExtendedKalmanFilter::ExtendedKalmanFilter(
-    const VecVecFunc& f, const VecVecFunc& h, const VecMatFunc& j_f,
-    const VecMatFunc& j_h, const VoidMatFunc& u_q, const VecMatFunc& u_r,
-    const Eigen::MatrixXd& P0)
-    : f(f),
-      h(h),
-      jacobian_f(j_f),
-      jacobian_h(j_h),
-      update_Q(u_q),
-      update_R(u_r),
-      P_post(P0),
-      n(P0.rows()),
-      I(Eigen::MatrixXd::Identity(n, n)),
-      x_pri(n),
-      x_post(n) {}
+  const VecVecFunc & f, const VecVecFunc & h, const VecMatFunc & j_f, const VecMatFunc & j_h,
+  const VoidMatFunc & u_q, const VecMatFunc & u_r, const Eigen::MatrixXd & P0)
+: f(f),
+  h(h),
+  jacobian_f(j_f),
+  jacobian_h(j_h),
+  update_Q(u_q),
+  update_R(u_r),
+  P_post(P0),
+  n(P0.rows()),
+  I(Eigen::MatrixXd::Identity(n, n)),
+  x_pri(n),
+  x_post(n)
+{
+}
 
-void ExtendedKalmanFilter::setState(const Eigen::VectorXd& x0) { x_post = x0; }
+void ExtendedKalmanFilter::setState(const Eigen::VectorXd & x0) { x_post = x0; }
 
-void ExtendedKalmanFilter::setInitState(const Eigen::VectorXd& x0) {
+void ExtendedKalmanFilter::setInitState(const Eigen::VectorXd & x0)
+{
   x_post = x0;
-  Eigen::DiagonalMatrix<double, 9> p0;
+  auto n = x0.rows();
+  Eigen::DiagonalMatrix<double, Eigen::Dynamic> p0(n);
   p0.setIdentity();
   P_post = p0;
   P_pri = p0;
   x_pri = x0;
 }
 
-Eigen::MatrixXd ExtendedKalmanFilter::predict() {
+Eigen::MatrixXd ExtendedKalmanFilter::predict()
+{
   F = jacobian_f(x_post), Q = update_Q();
 
   x_pri = f(x_post);
@@ -41,7 +46,8 @@ Eigen::MatrixXd ExtendedKalmanFilter::predict() {
   return x_pri;
 }
 
-Eigen::MatrixXd ExtendedKalmanFilter::update(const Eigen::VectorXd& z) {
+Eigen::MatrixXd ExtendedKalmanFilter::update(const Eigen::VectorXd & z)
+{
   H = jacobian_h(x_pri), R = update_R(z);
 
   K = P_pri * H.transpose() * (H * P_pri * H.transpose() + R).inverse();

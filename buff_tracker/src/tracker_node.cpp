@@ -213,6 +213,53 @@ BuffTrackerNode::BuffTrackerNode(const rclcpp::NodeOptions & options)
   tracker_->c_start = declare_parameter("gns.c_start", 0.0);
   tracker_->min_first_solve_time = declare_parameter("gns.min_first_solve_time", 2.0);
 
+  // GNS EKF
+  // state: a, w, c
+  // measurement: a, w, c
+  // f - Process function
+  auto f_gns = [this](const Eigen::VectorXd & x) { return x; };
+  // J_f - Jacobian of process function
+  auto j_f_gns = [this](const Eigen::VectorXd &) {
+    Eigen::MatrixXd f(3, 3);
+    f.setIdentity();
+    return f;
+  };
+  // h - Observation function
+  auto h_gns = [](const Eigen::VectorXd & x) { return x; };
+  // J_h - Jacobian of observation function
+  auto j_h_gns = [this](const Eigen::VectorXd &) {
+    Eigen::MatrixXd h(3, 3);
+    h.setIdentity();
+    return h;
+  };
+  // update_Q - process noise covariance matrix
+  s2q_a_ = declare_parameter("ekf_gns.sigma2_q_a", 0.1);
+  s2q_w_ = declare_parameter("ekf_gns.sigma2_q_w", 0.1);
+  s2q_c_ = declare_parameter("ekf_gns.sigma2_q_c", 100.0);
+  auto u_q_gns = [this]() {
+    Eigen::MatrixXd q(3, 3);
+    // clang-format off
+    q <<  s2q_a_, 0,       0,
+          0,       s2q_w_, 0,
+          0,       0,       s2q_c_;
+    // clang-format on
+    return q;
+  };
+  // update_R - measurement noise covariance matrix
+  r_a_ = declare_parameter("ekf_gns.r_a", 1e-8);
+  r_w_ = declare_parameter("ekf_gns.r_w", 5e-4);
+  r_c_ = declare_parameter("ekf_gns.r_c", 1e-8);
+  auto u_r_gns = [this](const Eigen::VectorXd & z) {
+    Eigen::DiagonalMatrix<double, 3> r;
+    r.diagonal() << abs(r_a_ * z(0)), abs(r_w_ * z(1)), abs(r_c_ * z(2));
+    return r;
+  };
+  // P - error estimate covariance matrix
+  Eigen::DiagonalMatrix<double, 3> p0_gns;
+  p0_gns.setIdentity();
+  tracker_->ekf_gns =
+    ExtendedKalmanFilter{f_gns, h_gns, j_f_gns, j_h_gns, u_q_gns, u_r_gns, p0_gns};
+
   // Task subscriber
   task_sub_ = this->create_subscription<std_msgs::msg::String>(
     "/task_mode", 10, std::bind(&BuffTrackerNode::taskCallback, this, std::placeholders::_1));
@@ -341,6 +388,7 @@ void BuffTrackerNode::bladesCallback(const buff_interfaces::msg::BladeArray::Sha
       rune_msg.r = state(6);
       rune_msg.theta = predict_blade.theta;
       rune_info_msg.speed = state(8);
+      double time_diff = 0.0;
       if (task_mode_ == "small_buff") {
         rune_msg.a = 0.0;
         rune_msg.w = 0.0;
@@ -349,17 +397,17 @@ void BuffTrackerNode::bladesCallback(const buff_interfaces::msg::BladeArray::Sha
       } else if (task_mode_ == "large_buff") {
         const auto & gns_state = tracker_->spd_state;
         int sign = state(8) > 0 ? 1 : -1;
-        if (tracker_->solver_status == Tracker::SolverStatus::VALID) {
+        if (
+          tracker_->solver_status == Tracker::SolverStatus::VALID ||
+          tracker_->solver_status == Tracker::SolverStatus::INVALID) {
+          time_diff = (time - tracker_->obs_start_time).seconds();
           rune_msg.a = gns_state(0) * sign;
           rune_msg.w = gns_state(1);
           rune_msg.c = gns_state(2);
           rune_msg.b = (2.09 - gns_state(0)) * sign;
-          rune_msg.t_offset = int((2 * PI - rune_msg.c) / rune_msg.w * 1000);
-        } else if (tracker_->solver_status == Tracker::SolverStatus::INVALID) {
-          rune_msg.a = gns_state(0) * sign;
-          rune_msg.w = gns_state(1);
-          rune_msg.c = gns_state(2);
-          rune_msg.b = (2.09 - gns_state(0)) * sign;
+          rune_msg.t_offset = int(
+            (2 * PI - angles::normalize_angle_positive(time_diff + rune_msg.c / rune_msg.w)) *
+            1000);
         } else {
           rune_msg.tracking = false;
           rune_msg.a = 0.0;
@@ -369,7 +417,7 @@ void BuffTrackerNode::bladesCallback(const buff_interfaces::msg::BladeArray::Sha
         }
       }
       rune_info_msg.predicted_speed =
-        rune_msg.a * sin(rune_msg.w * time.seconds() + rune_msg.c) + rune_msg.b;
+        rune_msg.a * sin(rune_msg.w * time_diff + rune_msg.c) + rune_msg.b;
       rune_msg.offset_id = tracker_->blade_id;
 
       // Publish visualization

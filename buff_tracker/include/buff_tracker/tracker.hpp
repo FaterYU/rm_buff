@@ -50,6 +50,8 @@ public:
 
   GaussNewtonSolver gns;
 
+  ExtendedKalmanFilter ekf_gns;
+
   double a_start, w_start, c_start;
   double min_first_solve_time;
 
@@ -104,6 +106,8 @@ public:
 
   Eigen::VectorXd spd_state;
 
+  rclcpp::Time obs_start_time;
+
   void getTrackerPosition(blade_transform & blade);
 
 private:
@@ -123,8 +127,6 @@ private:
   int detect_count_;
   int lost_count_;
   int timeout_count_;  // ms
-
-  rclcpp::Time obs_start_time_;
 
   double last_theta_;
 };

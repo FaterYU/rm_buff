@@ -54,6 +54,7 @@ private:
   double s2qr_;
   double r_blade_;
   double r_center_;
+
   int max_iter_;
   double min_step_;
   int obs_max_size_;
@@ -61,6 +62,13 @@ private:
   double min_a_;
   double max_w_;
   double min_w_;
+
+  double s2q_a_;
+  double s2q_w_;
+  double s2q_c_;
+  double r_a_;
+  double r_w_;
+  double r_c_;
 
   //  task subscriber
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr task_sub_;
