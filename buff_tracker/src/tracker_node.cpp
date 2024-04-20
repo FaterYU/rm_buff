@@ -354,6 +354,7 @@ void BuffTrackerNode::bladesCallback(const buff_interfaces::msg::BladeArray::Sha
           rune_msg.w = gns_state(1);
           rune_msg.c = gns_state(2);
           rune_msg.b = (2.09 - gns_state(0)) * sign;
+          rune_msg.t_offset = int((2 * PI - rune_msg.c) / rune_msg.w * 1000);
         } else if (tracker_->solver_status == Tracker::SolverStatus::INVALID) {
           rune_msg.a = gns_state(0) * sign;
           rune_msg.w = gns_state(1);

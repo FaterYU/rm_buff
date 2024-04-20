@@ -194,6 +194,7 @@ void Tracker::solve(const rclcpp::Time & time)
       }
       solver_status = VALID;
       spd_state = gns.getState();
+      spd_state(2) = angles::normalize_angle_positive(spd_state(2));
     } else {
       solver_status = NOT_ENOUGH_OBS;
     }
