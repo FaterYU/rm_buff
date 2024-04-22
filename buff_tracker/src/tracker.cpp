@@ -78,37 +78,35 @@ void Tracker::update(const buff_interfaces::msg::BladeArray::SharedPtr & blades_
     RCLCPP_DEBUG(
       rclcpp::get_logger("buff_tracker"), "theta_diff: %f, center_xoy_diff: %f", theta_diff,
       center_xoy_diff);
-    // if (center_xoy_diff < max_match_center_xoy_) {
-    //   detect_count_ = detect_count_ - 1 ? detect_count_ : 0;
-    // }
-    is_detected = true;
-    measurement = Eigen::VectorXd::Zero(4);
-    if (abs(theta_diff) > max_match_theta_) {
-      if (!handleBladeJump(theta_diff)) {
-        // use predict val to update ekf
-        // lost count plus 1
-        measurement << predict_blade.blade_position.x, predict_blade.blade_position.y,
-          predict_blade.blade_position.z, predict_blade.theta;
-        is_detected = false;
+    if (center_xoy_diff < max_match_center_xoy_) {
+      is_detected = true;
+      measurement = Eigen::VectorXd::Zero(4);
+      if (abs(theta_diff) > max_match_theta_) {
+        if (!handleBladeJump(theta_diff)) {
+          // use predict val to update ekf
+          // lost count plus 1
+          measurement << predict_blade.blade_position.x, predict_blade.blade_position.y,
+            predict_blade.blade_position.z, predict_blade.theta;
+          is_detected = false;
+        } else {
+          // use tracked val to update ekf
+          measurement << tracked_blade.blade_position.x, tracked_blade.blade_position.y,
+            tracked_blade.blade_position.z, tracked_blade.theta;
+        }
       } else {
-        // use tracked val to update ekf
         measurement << tracked_blade.blade_position.x, tracked_blade.blade_position.y,
           tracked_blade.blade_position.z, tracked_blade.theta;
       }
+      // transfer theta from [-pi, pi] to [-inf, inf]
+      measurement(3) = last_theta_ + angles::shortest_angular_distance(last_theta_, measurement(3));
+      last_theta_ = measurement(3);
+      target_state = ekf.update(measurement);
+      RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"), "EKF update");
     } else {
-      measurement << tracked_blade.blade_position.x, tracked_blade.blade_position.y,
-        tracked_blade.blade_position.z, tracked_blade.theta;
+      detect_count_ = detect_count_ ? detect_count_ - 1 : 0;
+      lost_count_++;
+      RCLCPP_WARN(rclcpp::get_logger("buff_tracker"), "Blade center xoy diff too large");
     }
-    // transfer theta from [-pi, pi] to [-inf, inf]
-    measurement(3) = last_theta_ + angles::shortest_angular_distance(last_theta_, measurement(3));
-    last_theta_ = measurement(3);
-    target_state = ekf.update(measurement);
-    RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"), "EKF update");
-    // }
-    // else {
-    //   RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"),
-    //                "Blade center xoy diff too large");
-    // }
   }
 
   // Limit fixed-length variables
@@ -190,8 +188,11 @@ void Tracker::solve(const rclcpp::Time & time)
         fail_count++;
         if (fail_count > 20) {
           RCLCPP_WARN(rclcpp::get_logger("buff_tracker"), "Fail to solve");
-          solver_status = INVALID;
-          spd_state = ekf_gns.predict();
+          if (solver_status == VALID) {
+            spd_state = ekf_gns.predict();
+          } else {
+            solver_status = INVALID;
+          }
           return;
         }
       }

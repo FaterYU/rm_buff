@@ -388,7 +388,8 @@ void BuffTrackerNode::bladesCallback(const buff_interfaces::msg::BladeArray::Sha
       rune_msg.r = state(6);
       rune_msg.theta = predict_blade.theta;
       rune_info_msg.speed = state(8);
-      double time_diff = 0.0;
+      auto now_sec = time.seconds();
+      auto obs_time = tracker_->obs_start_time.seconds();
       if (task_mode_ == "small_buff") {
         rune_msg.a = 0.0;
         rune_msg.w = 0.0;
@@ -397,19 +398,15 @@ void BuffTrackerNode::bladesCallback(const buff_interfaces::msg::BladeArray::Sha
       } else if (task_mode_ == "large_buff") {
         const auto & gns_state = tracker_->spd_state;
         int sign = state(8) > 0 ? 1 : -1;
-        if (
-          tracker_->solver_status == Tracker::SolverStatus::VALID ||
-          tracker_->solver_status == Tracker::SolverStatus::INVALID) {
-          time_diff = (time - tracker_->obs_start_time).seconds();
+        if (tracker_->solver_status == Tracker::SolverStatus::VALID) {
           rune_msg.a = gns_state(0) * sign;
           rune_msg.w = gns_state(1);
           rune_msg.c = gns_state(2);
           rune_msg.b = (2.09 - gns_state(0)) * sign;
-          rune_msg.t_offset = int(
-            (2 * PI - angles::normalize_angle_positive(time_diff + rune_msg.c / rune_msg.w)) *
-            1000);
+          int T = 2 * PI / rune_msg.w * 1000;
+          rune_msg.t_offset = int((now_sec - obs_time + rune_msg.c / rune_msg.w) * 1000) % T;
         } else {
-          rune_msg.tracking = false;
+          rune_msg.tracking = tracker_->solver_status == Tracker::SolverStatus::INVALID;
           rune_msg.a = 0.0;
           rune_msg.w = 0.0;
           rune_msg.c = 0.0;
@@ -417,7 +414,7 @@ void BuffTrackerNode::bladesCallback(const buff_interfaces::msg::BladeArray::Sha
         }
       }
       rune_info_msg.predicted_speed =
-        rune_msg.a * sin(rune_msg.w * time_diff + rune_msg.c) + rune_msg.b;
+        rune_msg.a * sin(1.0 * rune_msg.t_offset / 1000.0 * rune_msg.w) + rune_msg.b;
       rune_msg.offset_id = tracker_->blade_id;
 
       // Publish visualization

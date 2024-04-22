@@ -49,7 +49,7 @@ BuffDetectorNode::BuffDetectorNode(const rclcpp::NodeOptions & options)
 void BuffDetectorNode::taskCallback(const std_msgs::msg::String::SharedPtr task_msg)
 {
   std::string task_mode = task_msg->data;
-  if (task_mode == "small_buff" || task_mode == "large_buff" || task_mode == "auto") {
+  if (task_mode == "small_buff" || task_mode == "large_buff") {
     is_buff_task_ = true;
   } else {
     is_buff_task_ = false;
