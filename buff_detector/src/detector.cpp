@@ -1,7 +1,11 @@
 #include "buff_detector/detector.hpp"
 
-namespace rm_buff {
-Detector::Detector(const std::string model_path) : model_path_(model_path) {
+#include <rclcpp/rclcpp.hpp>
+
+namespace rm_buff
+{
+Detector::Detector(const std::string model_path) : model_path_(model_path)
+{
   core_ = ov::Core();
   model_ = core_.read_model(model_path_);
 
@@ -15,28 +19,30 @@ Detector::Detector(const std::string model_path) : model_path_(model_path) {
   infer_request_ = compiled_model_.create_infer_request();
   input_tensor_ = infer_request_.get_input_tensor(0);
 
-  blade_template_ = {cv::Point2f(138.0, 0.0),   cv::Point2f(25.0, 28.0),
-                     cv::Point2f(12.0, 125.0),  cv::Point2f(5.0, 235.0),
-                     cv::Point2f(0.0, 345.0),   cv::Point2f(155.0, 381.0),
-                     cv::Point2f(216.0, 381.0), cv::Point2f(371.0, 345.0),
-                     cv::Point2f(366.0, 235.0), cv::Point2f(359.0, 125.0),
-                     cv::Point2f(346.0, 28.0),  cv::Point2f(233.0, 0.0)};
+  blade_template_ = {
+    cv::Point2f(138.0, 0.0),   cv::Point2f(25.0, 28.0),   cv::Point2f(12.0, 125.0),
+    cv::Point2f(5.0, 235.0),   cv::Point2f(0.0, 345.0),   cv::Point2f(155.0, 381.0),
+    cv::Point2f(216.0, 381.0), cv::Point2f(371.0, 345.0), cv::Point2f(366.0, 235.0),
+    cv::Point2f(359.0, 125.0), cv::Point2f(346.0, 28.0),  cv::Point2f(233.0, 0.0)};
+
+  corner_template_ = {
+    cv::Point2f(25.0, 28.0), cv::Point2f(0.0, 345.0), cv::Point2f(371.0, 345.0),
+    cv::Point2f(346.0, 28.0)};
 
   cv::Point2f center(185.0, 186.0);
 
   // [-160.0, -225.0],[-166.0, -122.0],[165.0, -122.0],[159.0, -225.0]
-  kpt_template_ = {cv::Point2f(26.0, 131.0), cv::Point2f(20.0, 234.0),
-                   cv::Point2f(351.0, 234.0), cv::Point2f(345.0, 131.0)};
+  kpt_template_ = {
+    cv::Point2f(26.0, 131.0), cv::Point2f(20.0, 234.0), cv::Point2f(351.0, 234.0),
+    cv::Point2f(345.0, 131.0)};
 
   double ratio_x = 1.35;
   double ratio_y = 1.2;
   double move_x = 0.0;
   double move_y = -20.0;
   for (size_t i = 0; i < blade_template_.size(); ++i) {
-    blade_template_[i].x =
-        (blade_template_[i].x - center.x + move_x) * ratio_x + center.x;
-    blade_template_[i].y =
-        (blade_template_[i].y - center.y + move_y) * ratio_y + center.y;
+    blade_template_[i].x = (blade_template_[i].x - center.x + move_x) * ratio_x + center.x;
+    blade_template_[i].y = (blade_template_[i].y - center.y + move_y) * ratio_y + center.y;
   }
 }
 
@@ -44,7 +50,8 @@ Detector::Detector(const std::string model_path) : model_path_(model_path) {
 
 // Detector::~Detector() {}
 
-std::vector<Blade> Detector::Detect(cv::Mat& src_img) {
+std::vector<Blade> Detector::Detect(cv::Mat & src_img)
+{
   cv::Mat img;
 
   // cv::resize(src_img, img, cv::Size(image_size, image_size));
@@ -57,8 +64,8 @@ std::vector<Blade> Detector::Detect(cv::Mat& src_img) {
   } else {
     img = img.clone().reshape(1, 1);
   }
-  input_tensor_ = ov::Tensor(input_tensor_.get_element_type(),
-                             input_tensor_.get_shape(), img.ptr<float>());
+  input_tensor_ =
+    ov::Tensor(input_tensor_.get_element_type(), input_tensor_.get_shape(), img.ptr<float>());
 
   infer_request_.set_input_tensor(0, input_tensor_);
 
@@ -78,18 +85,22 @@ std::vector<Blade> Detector::Detect(cv::Mat& src_img) {
   // infer_request_.wait();
   auto output = infer_request_.get_output_tensor(0);
 
-  non_max_suppression(output, conf_threshold, nms_threshold, CLS_NUM,
-                      src_img.size());
+  non_max_suppression(output, conf_threshold, nms_threshold, CLS_NUM, src_img.size());
 
-  for (auto& blade : blade_array_) {
-    calibrate_kpts(blade, src_img);
+  for (size_t i = 0; i < blade_array_.size(); i++) {
+    if (!calibrate_kpts(blade_array_[i], src_img)) {
+      blade_array_.erase(blade_array_.begin() + i);
+      i--;
+      RCLCPP_WARN(rclcpp::get_logger("rclcpp"), "Invalid keypoints");
+    }
   }
 
   return blade_array_;
 }
 
-void Detector::non_max_suppression(ov::Tensor& output, float conf_thres,
-                                   float iou_thres, int nc, cv::Size img_size) {
+void Detector::non_max_suppression(
+  ov::Tensor & output, float conf_thres, float iou_thres, int nc, cv::Size img_size)
+{
   auto data = output.data<float>();
 
   int bs = output.get_shape()[0];  // batch size
@@ -128,27 +139,24 @@ void Detector::non_max_suppression(ov::Tensor& output, float conf_thres,
       std::vector<cv::Point2f> kpts;
       for (int k = 0; k < KPT_NUM; k++) {
         cv::Point2f kpt;
-        kpt.x = (data[offset + 4 + nc + k * 2] - padd_w_) /
-                    (image_size - 2 * padd_w_) * img_size.width;
-        kpt.y = (data[offset + 4 + nc + k * 2 + 1] - padd_h_) /
-                    (image_size - 2 * padd_h_) * img_size.height;
+        kpt.x =
+          (data[offset + 4 + nc + k * 2] - padd_w_) / (image_size - 2 * padd_w_) * img_size.width;
+        kpt.y = (data[offset + 4 + nc + k * 2 + 1] - padd_h_) / (image_size - 2 * padd_h_) *
+                img_size.height;
         kpts.emplace_back(kpt);
       }
       kpts_list.emplace_back(kpts);
     }
   }
 
-  cv::dnn::softNMSBoxes(boxes, confidences, picked_useless, conf_thres,
-                        iou_thres, picked);
+  cv::dnn::softNMSBoxes(boxes, confidences, picked_useless, conf_thres, iou_thres, picked);
 
   blade_array_.clear();
   for (size_t i = 0; i < picked.size(); ++i) {
     Blade blade;
     int idx = picked[i];
-    auto x = float(boxes[idx].x - padd_w_) / (image_size - 2 * padd_w_) *
-             img_size.width;
-    auto y = float(boxes[idx].y - padd_h_) / (image_size - 2 * padd_h_) *
-             img_size.height;
+    auto x = float(boxes[idx].x - padd_w_) / (image_size - 2 * padd_w_) * img_size.width;
+    auto y = float(boxes[idx].y - padd_h_) / (image_size - 2 * padd_h_) * img_size.height;
     auto width = float(boxes[idx].width) / image_size * img_size.width;
     auto height = float(boxes[idx].height) / image_size * img_size.height;
     blade.rect = cv::Rect(x - (width / 2), y - (height / 2), width, height);
@@ -161,7 +169,8 @@ void Detector::non_max_suppression(ov::Tensor& output, float conf_thres,
   return;
 }
 
-void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
+bool Detector::calibrate_kpts(Blade & blade, cv::Mat & img)
+{
   debug_img = img.clone();
   // cv::rectangle(debug_img, blade.rect, cv::Scalar(0, 255, 0), 4);
 
@@ -186,6 +195,10 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
   std::vector<cv::Point2f> dstBlade;
   cv::perspectiveTransform(blade_template_, dstBlade, M);
 
+  // corner_template_ in M
+  std::vector<cv::Point2f> dstCorner;
+  cv::perspectiveTransform(corner_template_, dstCorner, M);
+
   // 最小外接矩形
   cv::RotatedRect dstRect = cv::minAreaRect(dstBlade);
 
@@ -197,8 +210,7 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
   }
 
   for (size_t i = 0; i < dstRectP.size(); ++i) {
-    cv::line(debug_img, dstRectP[i], dstRectP[(i + 1) % 4],
-             cv::Scalar(0, 255, 0), 4);
+    cv::line(debug_img, dstRectP[i], dstRectP[(i + 1) % 4], cv::Scalar(0, 255, 0), 4);
   }
 
   cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC3);
@@ -212,11 +224,6 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
   cv::Mat gray_img;
   cv::cvtColor(masked_img, gray_img, cv::COLOR_BGR2GRAY);
   cv::threshold(gray_img, binary_img, bin_threshold, 255, cv::THRESH_BINARY);
-    // dilate
-  cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
-  cv::dilate(binary_img, binary_img, element);
-
-
   cv::Mat rotated_img;
   cv::warpAffine(masked_img, rotated_img, rot_mat, img.size());
 
@@ -224,16 +231,12 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
   cv::Mat gray_rotated_img;
   cv::cvtColor(rotated_img, gray_rotated_img, cv::COLOR_BGR2GRAY);
   cv::Mat binary_rotated_img;
-  cv::threshold(gray_rotated_img, binary_rotated_img, bin_threshold, 255,
-                cv::THRESH_BINARY);
-                  // dilate
-  cv::dilate(binary_rotated_img, binary_rotated_img, element);
-
+  cv::threshold(gray_rotated_img, binary_rotated_img, bin_threshold, 255, cv::THRESH_BINARY);
 
   std::vector<std::vector<cv::Point>> contours;
   std::vector<cv::Vec4i> hierarchy;
-  cv::findContours(binary_rotated_img, contours, hierarchy, cv::RETR_EXTERNAL,
-                   cv::CHAIN_APPROX_SIMPLE);
+  cv::findContours(
+    binary_rotated_img, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
   std::vector<cv::Point> merged_contour;
   for (size_t i = 0; i < contours.size(); ++i) {
@@ -250,9 +253,10 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
   r = rect.x + rect.width;
 
   std::vector<cv::Point2f> roi_points(4, cv::Point2f(0.0, 0.0));
+  std::vector<double> roi_points_diff(4, 0.0);
   std::vector<int> coincidenceB(4, 0);
 
-  for (auto& point : merged_contour) {
+  for (auto & point : merged_contour) {
     int k = -1;
     if (d - 1 == point.y) {
       k = 0;
@@ -279,19 +283,35 @@ void Detector::calibrate_kpts(Blade& blade, cv::Mat& img) {
     p.y = roi_points[i].y;
     cv::Mat point = (cv::Mat_<double>(3, 1) << p.x, p.y, 1);
     point = inv_rot_mat * point;
-    cv::circle(debug_img, cv::Point(point.at<double>(0), point.at<double>(1)),
-               8, cv::Scalar(0, 255, 0), -1);
+    cv::circle(
+      debug_img, cv::Point(point.at<double>(0), point.at<double>(1)), 8, cv::Scalar(0, 255, 0), -1);
     roi_points[i].x = point.at<double>(0);
     roi_points[i].y = point.at<double>(1);
+    roi_points_diff[i] = cv::norm(roi_points[i] - dstCorner[i]);
   }
+
+  double kpt_width =
+    (cv::norm(dstCorner[0] - dstCorner[3]) + cv::norm(dstCorner[1] - dstCorner[2])) / 2;
+  double kpt_height =
+    (cv::norm(dstCorner[0] - dstCorner[1]) + cv::norm(dstCorner[2] - dstCorner[3])) / 2;
+  double fault_tolerant = pow(pow(kpt_width, 2) + pow(kpt_height, 2), 0.5) * fault_tolerance_ratio;
 
   blade.kpt[0] = roi_points[0];
   blade.kpt[1] = roi_points[1];
   blade.kpt[3] = roi_points[2];
   blade.kpt[4] = roi_points[3];
+
+  for (auto & diff : roi_points_diff) {
+    if (diff > fault_tolerant) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
-cv::Mat Detector::letterbox(cv::Mat& src, int h, int w) {
+cv::Mat Detector::letterbox(cv::Mat & src, int h, int w)
+{
   int in_w = src.cols;  // width
   int in_h = src.rows;  // height
   int tar_w = w;
@@ -313,28 +333,26 @@ cv::Mat Detector::letterbox(cv::Mat& src, int h, int w) {
   int bottom = int(round(padd_h_ + 0.1));
   int left = int(round(padd_w_ - 0.1));
   int right = int(round(padd_w_ + 0.1));
-  cv::copyMakeBorder(resize_img, resize_img, top, bottom, left, right, 0,
-                     cv::Scalar(114, 114, 114));
+  cv::copyMakeBorder(
+    resize_img, resize_img, top, bottom, left, right, 0, cv::Scalar(114, 114, 114));
 
   return resize_img;
 }
 
-void Detector::draw_blade(cv::Mat& img) {
+void Detector::draw_blade(cv::Mat & img)
+{
   for (size_t i = 0; i < blade_array_.size(); ++i) {
     int kpt_idx[4] = {0, 1, 3, 4};
     for (int j = 0; j < 2; j++) {
       auto kpt_start =
-          cv::Point(blade_array_[i].kpt[kpt_idx[j]].x,
-                    blade_array_[i].kpt[kpt_idx[j]].y);
+        cv::Point(blade_array_[i].kpt[kpt_idx[j]].x, blade_array_[i].kpt[kpt_idx[j]].y);
       auto kpt_end =
-          cv::Point(blade_array_[i].kpt[kpt_idx[j + 2]].x,
-                    blade_array_[i].kpt[kpt_idx[j + 2]].y);
+        cv::Point(blade_array_[i].kpt[kpt_idx[j + 2]].x, blade_array_[i].kpt[kpt_idx[j + 2]].y);
       cv::line(img, kpt_start, kpt_end, cv::Scalar(0, 255, 0), 4);
     }
-    cv::circle(img,
-               cv::Point(blade_array_[i].kpt[2].x,
-                         blade_array_[i].kpt[2].y),
-               8, cv::Scalar(255, 0, 0), -1);
+    cv::circle(
+      img, cv::Point(blade_array_[i].kpt[2].x, blade_array_[i].kpt[2].y), 8, cv::Scalar(255, 0, 0),
+      -1);
   }
 }
 

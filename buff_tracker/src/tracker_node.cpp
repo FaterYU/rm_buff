@@ -369,7 +369,7 @@ void BuffTrackerNode::bladesCallback(const buff_interfaces::msg::BladeArray::Sha
     } else if (
       tracker_->tracker_state == Tracker::State::TRACKING ||
       tracker_->tracker_state == Tracker::State::TEMP_LOST) {
-      rune_msg.tracking = tracker_->center_xoy_diff < tracker_->max_distance_diff;
+      rune_msg.tracking = true;
       const auto & state = tracker_->target_state;
 
       // calculate from prediction
@@ -377,25 +377,19 @@ void BuffTrackerNode::bladesCallback(const buff_interfaces::msg::BladeArray::Sha
       tracker_->getTrackerPosition(predict_blade);
 
       rune_msg.position = predict_blade.center_position;
-      // double dyaw = 0.16;
-      // double dist = 8.0;
-      // rune_msg.position.x = cos(dyaw) * dist;
-      // rune_msg.position.y = sin(dyaw) * dist;
-      // rune_msg.position.z = 2.3;
       rune_msg.velocity.x = state(3);
       rune_msg.velocity.y = state(4);
       rune_msg.velocity.z = state(5);
       rune_msg.r = state(6);
       rune_msg.theta = predict_blade.theta;
       rune_info_msg.speed = state(8);
+      rune_msg.a = 0.0;
+      rune_msg.w = 0.0;
+      rune_msg.c = 0.0;
+      rune_msg.b = state(8);
       auto now_sec = time.seconds();
       auto obs_time = tracker_->obs_start_time.seconds();
-      if (task_mode_ == "small_buff") {
-        rune_msg.a = 0.0;
-        rune_msg.w = 0.0;
-        rune_msg.c = 0.0;
-        rune_msg.b = state(8);
-      } else if (task_mode_ == "large_buff") {
+      if (task_mode_ == "large_buff") {
         const auto & gns_state = tracker_->spd_state;
         int sign = state(8) > 0 ? 1 : -1;
         if (tracker_->solver_status == Tracker::SolverStatus::VALID) {
@@ -407,10 +401,6 @@ void BuffTrackerNode::bladesCallback(const buff_interfaces::msg::BladeArray::Sha
           rune_msg.t_offset = int((now_sec - obs_time + rune_msg.c / rune_msg.w) * 1000) % T;
         } else {
           rune_msg.tracking = tracker_->solver_status == Tracker::SolverStatus::INVALID;
-          rune_msg.a = 0.0;
-          rune_msg.w = 0.0;
-          rune_msg.c = 0.0;
-          rune_msg.b = state(8);
         }
       }
       rune_info_msg.predicted_speed =

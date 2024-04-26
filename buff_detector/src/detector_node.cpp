@@ -29,6 +29,8 @@ BuffDetectorNode::BuffDetectorNode(const rclcpp::NodeOptions & options)
   detector_->conf_threshold = this->declare_parameter("detector.conf_threshold", 0.70);
   detector_->image_size = this->declare_parameter("detector.image_size", 640);
   detector_->bin_threshold = this->declare_parameter("detector.bin_threshold", 70.0);
+  detector_->fault_tolerance_ratio =
+    this->declare_parameter("detector.fault_tolerance_ratio", 0.065);
 
   cam_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
     "/camera_info", rclcpp::SensorDataQoS(),
@@ -125,9 +127,12 @@ std::vector<Blade> BuffDetectorNode::DetectBlades(
 {
   auto img = cv_bridge::toCvShare(image_msg, "rgb8")->image;
 
+  // copy
+  cv::Mat img_copy = img.clone();
+
   // start time
   auto start = std::chrono::steady_clock::now();
-  std::vector<Blade> result = detector_->Detect(img);
+  std::vector<Blade> result = detector_->Detect(img_copy);
 
   // end time
   auto end = std::chrono::steady_clock::now();
@@ -142,9 +147,9 @@ std::vector<Blade> BuffDetectorNode::DetectBlades(
   } else {
     RCLCPP_DEBUG(this->get_logger(), "Blade detected");
     // draw blade
-    detector_->draw_blade(img);
+    detector_->draw_blade(img_copy);
   }
-  result_img_pub_.publish(cv_bridge::CvImage(image_msg->header, "rgb8", img).toImageMsg());
+  result_img_pub_.publish(cv_bridge::CvImage(image_msg->header, "rgb8", img_copy).toImageMsg());
 
   bin_img_pub_.publish(
     cv_bridge::CvImage(image_msg->header, "mono8", detector_->binary_img).toImageMsg());
