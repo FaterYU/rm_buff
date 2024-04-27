@@ -78,7 +78,7 @@ void Tracker::update(const buff_interfaces::msg::BladeArray::SharedPtr & blades_
     RCLCPP_DEBUG(
       rclcpp::get_logger("buff_tracker"), "theta_diff: %f, center_xoy_diff: %f", theta_diff,
       center_xoy_diff);
-    if (center_xoy_diff < max_match_center_xoy_) {
+    if (center_xoy_diff < max_match_center_xoy_ || tracker_state == DETECTING) {
       is_detected = true;
       measurement = Eigen::VectorXd::Zero(4);
       bool need_update = true;

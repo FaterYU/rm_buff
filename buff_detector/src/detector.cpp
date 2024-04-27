@@ -36,10 +36,11 @@ Detector::Detector(const std::string model_path) : model_path_(model_path)
     cv::Point2f(26.0, 131.0), cv::Point2f(20.0, 234.0), cv::Point2f(351.0, 234.0),
     cv::Point2f(345.0, 131.0)};
 
-  double ratio_x = 1.35;
-  double ratio_y = 1.2;
+  double ratio_x = 1.25;
+  double ratio_y = 1.15;
   double move_x = 0.0;
-  double move_y = -20.0;
+  double move_y = 0.0;
+
   for (size_t i = 0; i < blade_template_.size(); ++i) {
     blade_template_[i].x = (blade_template_[i].x - center.x + move_x) * ratio_x + center.x;
     blade_template_[i].y = (blade_template_[i].y - center.y + move_y) * ratio_y + center.y;
@@ -210,7 +211,7 @@ bool Detector::calibrate_kpts(Blade & blade, cv::Mat & img)
   }
 
   for (size_t i = 0; i < dstRectP.size(); ++i) {
-    cv::line(debug_img, dstRectP[i], dstRectP[(i + 1) % 4], cv::Scalar(0, 255, 0), 4);
+    cv::line(debug_img, dstRectP[i], dstRectP[(i + 1) % 4], cv::Scalar(0, 255, 0), 2);
   }
 
   cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC3);
@@ -284,7 +285,9 @@ bool Detector::calibrate_kpts(Blade & blade, cv::Mat & img)
     cv::Mat point = (cv::Mat_<double>(3, 1) << p.x, p.y, 1);
     point = inv_rot_mat * point;
     cv::circle(
-      debug_img, cv::Point(point.at<double>(0), point.at<double>(1)), 8, cv::Scalar(0, 255, 0), -1);
+      debug_img, cv::Point(point.at<double>(0), point.at<double>(1)), 3, cv::Scalar(0, 255, 0), -1);
+    cv::circle(
+      debug_img, cv::Point(dstCorner[i].x, dstCorner[i].y), 3, cv::Scalar(255, 255, 0), -1);
     roi_points[i].x = point.at<double>(0);
     roi_points[i].y = point.at<double>(1);
     roi_points_diff[i] = cv::norm(roi_points[i] - dstCorner[i]);

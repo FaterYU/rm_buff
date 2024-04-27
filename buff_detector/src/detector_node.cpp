@@ -15,9 +15,10 @@ BuffDetectorNode::BuffDetectorNode(const rclcpp::NodeOptions & options)
   debug_img_pub_ = image_transport::create_publisher(this, "/debug/buff_debug_img");
 
   auto pkg_path = ament_index_cpp::get_package_share_directory("buff_detector");
-  auto model_path = pkg_path + "/models/" + this->declare_parameter("model", "best_quantized.xml");
+  std::string model_name = this->declare_parameter("detector.model", "best_quantized.xml");
+  auto model_path = pkg_path + "/models/" + model_name;
   detector_ = std::make_unique<Detector>(model_path);
-  RCLCPP_INFO(this->get_logger(), "Model loaded");
+  RCLCPP_INFO(this->get_logger(), "Model loaded: %s", model_path.c_str());
 
   // Task subscriber
   is_buff_task_ = false;
