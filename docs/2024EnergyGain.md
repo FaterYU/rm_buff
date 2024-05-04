@@ -233,8 +233,10 @@ $$
 对于大能量机关的转速拟合问题:
 
 $$
+\begin{cases}
 X = \begin{bmatrix} a & b & c & w \end{bmatrix}^T \\
 f(X) = spd - a \cdot sin(w \cdot t + c) - b \\
+\end{cases}
 $$
 
 需要求解如下非线性最小二乘问题：
