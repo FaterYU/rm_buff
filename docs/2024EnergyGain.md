@@ -281,7 +281,7 @@ $$
 - **跟踪效果**
   TBD
 - **转速拟合效果**
-- TBD
+  TBD
 - **实际击打效果**
   TBD
 
@@ -292,6 +292,6 @@ $$
 - **跟踪效果**
   TBD
 - **转速拟合效果**
-- TBD
+  TBD
 - **实际击打效果**
   [这是什么？开一下(bilibili.com)](https://www.bilibili.com/video/BV1EH4y1P7ih/?share_source=copy_web)
