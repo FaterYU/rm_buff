@@ -21,7 +21,7 @@
 
 ## 任务概述
 
-> [RoboMaster 2024机甲大师超级对抗赛比赛规则手册V1.2](https://terra-1-g.djicdn.com/b2a076471c6c4b72b574a977334d3e05/RM2024/RoboMaster 2024 机甲大师超级对抗赛比赛规则手册V1.2（20240411）.pdf)
+> [RoboMaster 2024机甲大师超级对抗赛比赛规则手册V1.2](https://terra-1-g.djicdn.com/b2a076471c6c4b72b574a977334d3e05/RM2024/RoboMaster%202024%20机甲大师超级对抗赛比赛规则手册V1.2（20240411）.pdf)
 >
 > 以下仅列出部分内容，具体描述请详细阅读规则
 
