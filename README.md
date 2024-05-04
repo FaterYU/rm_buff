@@ -6,20 +6,50 @@ RoboMaster能量机关自动瞄准算法模块
 
 本项目基于 [FaterYU/rm_vision (github.com)](https://github.com/FaterYU/rm_vision) 框架开发，与 [FaterYU/rm_auto_aim (github.com)](https://github.com/FaterYU/rm_auto_aim) 可共存运行，使用 [FaterYU/rm_serial_driver (github.com)](https://github.com/FaterYU/rm_serial_driver) 进行串口通信。
 
+[![License: APACHE-2.0](https://img.shields.io/badge/APACHE-2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
+
 ## 使用指南
+
+### 使用rm_vision镜像
+
+~~拉取镜像~~ 镜像暂未开源，2024赛季结束后开源
+
+```shell
+docker pull fateryu/rm_vision:lastest
+```
+
+构建开发容器
+
+```shell
+docker run -it --name rv_devel \
+--privileged --network host \
+-v /dev:/dev -v $HOME/.ros:/root/.ros -v ws:/ros_ws \
+fateryu/rm_vision:lastest \
+ros2 launch foxglove_bridge foxglove_bridge_launch.xml
+```
+
+构建运行容器
+
+```shell
+docker run -it --name rv_runtime \
+--privileged --network host --restart always \
+-v /dev:/dev -v $HOME/.ros:/root/.ros -v ws:/ros_ws \
+fateryu/rm_vision:lastest \
+ros2 launch rm_vision_bringup vision_bringup.launch.py
+```
 
 ### 在rm_vision中启动
 
 1. 将本模块 `main` 分支拉取到 `ros_ws/src/` 目录下
 2. 确保包含 `rm_vison` `rm_serial_driver` `rm_gimbal_description` 模块
-3. 构建
+3. `colcon build --symlink-install`
 4. `source ./install/setup.zsh`
 5. `ros2 launch rm_vision_bringup vision_bringup.launch.py`
 
 ### 模块独立启动
 
 1. 将本模块 `main` 分支拉取到 `ros_ws/src/` 目录下
-2. 构建
+2. `colcon build --symlink-install`
 3. `source ./install/setup.zsh`
 4. `ros2 launch rm_buff_bringup rm_buff_bringup.launch.py`
 
@@ -30,6 +60,14 @@ RoboMaster能量机关自动瞄准算法模块
 ### 下位机运算示例
 
 [buff_calculate](./example/buff_calculate.c)
+
+### 可视化
+
+```shell
+sudo apt install ros-$ROS_DISTRO-foxglove-bridge
+source ./install/setup.zsh
+ros2 launch foxglove_bridge foxglove_bridge_launch.xml
+```
 
 ## 模块文档
 
