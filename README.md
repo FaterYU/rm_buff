@@ -38,7 +38,7 @@ docker pull ghcr.io/fateryu/rm_vision:latest
 docker run -it --name rv_devel \
 --privileged --network host \
 -v /dev:/dev -v $HOME/.ros:/root/.ros -v ws:/ros_ws \
-fateryu/rm_vision:lastest \
+ghcr.io/fateryu/rm_vision:latest \
 ros2 launch foxglove_bridge foxglove_bridge_launch.xml
 ```
 
@@ -48,7 +48,7 @@ ros2 launch foxglove_bridge foxglove_bridge_launch.xml
 docker run -it --name rv_runtime \
 --privileged --network host --restart always \
 -v /dev:/dev -v $HOME/.ros:/root/.ros -v ws:/ros_ws \
-fateryu/rm_vision:lastest \
+ghcr.io/fateryu/rm_vision:latest \
 ros2 launch rm_vision_bringup vision_bringup.launch.py
 ```
 
