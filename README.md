@@ -29,7 +29,7 @@ TBD
 拉取镜像
 
 ```shell
-docker pull fateryu/rm_vision:lastest
+docker pull ghcr.io/fateryu/rm_vision:latest
 ```
 
 构建开发容器
