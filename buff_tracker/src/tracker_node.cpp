@@ -1,3 +1,6 @@
+// Copyright (C) 2024 Zheng Yu
+// Licensed under the MIT License.
+
 #include "buff_tracker/tracker_node.hpp"
 
 namespace rm_buff

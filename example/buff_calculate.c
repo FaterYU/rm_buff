@@ -1,3 +1,6 @@
+// Copyright (C) 2024 Zheng Yu
+// Licensed under the MIT License.
+
 #include "buff_calculate.h"
 
 #include <stdint.h>

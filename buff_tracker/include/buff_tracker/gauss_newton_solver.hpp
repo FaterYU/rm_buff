@@ -1,3 +1,6 @@
+// Copyright (C) 2024 Zheng Yu
+// Licensed under the MIT License.
+
 #ifndef BUFF_TRACKER__GAUSS_NEWTON_SOLVER_HPP_
 #define BUFF_TRACKER__GAUSS_NEWTON_SOLVER_HPP_
 

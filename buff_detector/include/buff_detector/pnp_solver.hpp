@@ -1,3 +1,6 @@
+// Copyright (C) 2024 Zheng Yu
+// Licensed under the MIT License.
+
 #ifndef BUFF_DETECTOR__PNP_SOLVER_HPP_
 #define BUFF_DETECTOR__PNP_SOLVER_HPP_
 
@@ -10,19 +13,22 @@
 
 #include "buff_detector/blade.hpp"
 
-namespace rm_buff {
-class PnPSolver {
- public:
-  PnPSolver(const std::array<double, 9>& camera_matrix,
-            const std::vector<double>& distortion_coefficients);
+namespace rm_buff
+{
+class PnPSolver
+{
+public:
+  PnPSolver(
+    const std::array<double, 9> & camera_matrix,
+    const std::vector<double> & distortion_coefficients);
 
   // Get 3d position
-  bool solvePnP(const Blade& blade, cv::Mat& rvec, cv::Mat& tvec);
+  bool solvePnP(const Blade & blade, cv::Mat & rvec, cv::Mat & tvec);
 
   // Calculate the distance between blade center and image center
-  float calculateDistanceToCenter(const cv::Point2f& image_point);
+  float calculateDistanceToCenter(const cv::Point2f & image_point);
 
- private:
+private:
   cv::Mat camera_matrix_;
   cv::Mat dist_coeffs_;
 

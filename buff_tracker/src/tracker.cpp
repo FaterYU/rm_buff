@@ -1,3 +1,6 @@
+// Copyright (C) 2024 Zheng Yu
+// Licensed under the MIT License.
+
 #include "buff_tracker/tracker.hpp"
 
 namespace rm_buff
@@ -40,6 +43,7 @@ void Tracker::init(const buff_interfaces::msg::BladeArray::SharedPtr & blades_ms
   tracker_state = DETECTING;
   detect_count_ = 0;
 
+  gns.obs.clear();
   solver_status = WAITING;
 }
 
@@ -114,17 +118,12 @@ void Tracker::update(const buff_interfaces::msg::BladeArray::SharedPtr & blades_
   }
 
   // Limit fixed-length variables
-  // target_state(2) = (blade_z_ground - robot_z_ground) / 1000;
-  // target_state(5) = 0.0;
   target_state(6) = BLADE_R_OFFSET / 1000;
-  // target_state(8) = OMEGA;
-  // auto distance = pow(target_state(0), 2) + pow(target_state(1), 0.5) *
-  // 1000; if (distance > distance + max_distance_diff || distance < distance
-  // - max_distance_diff) {
+  // auto distance = pow(target_state(0), 2) + pow(target_state(1), 0.5) * 1000;
+  // if (distance > distance + max_distance_diff || distance < distance - max_distance_diff) {
   //   target_state(0) *= distance / distance;
   //   target_state(1) *= distance / distance;
-  //   RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"), "ERROR center
-  //   distance");
+  //   RCLCPP_DEBUG(rclcpp::get_logger("buff_tracker"), "ERROR center distance");
   // }
   ekf.setState(target_state);
 
@@ -174,7 +173,7 @@ void Tracker::solve(const rclcpp::Time & time)
     spd_state = Eigen::VectorXd::Zero(3);
 
     ekf_gns.setInitState(x0);
-  } else if (tracker_state == TRACKING) {
+  } else if (tracker_state == TRACKING || tracker_state == TEMP_LOST) {
     double dt = (time - obs_start_time).seconds();
     double spd = abs(target_state(8));
 
@@ -199,6 +198,7 @@ void Tracker::solve(const rclcpp::Time & time)
             solver_status = INVALID;
             gns.obs.erase(gns.obs.begin());
             lost_count_++;
+            tracker_state = TEMP_LOST;
           }
           return;
         }
@@ -211,6 +211,10 @@ void Tracker::solve(const rclcpp::Time & time)
     } else {
       solver_status = NOT_ENOUGH_OBS;
     }
+  }
+  if (lost_count_ > lost_threshold) {
+    lost_count_ = 0;
+    tracker_state = LOST;
   }
 }
 

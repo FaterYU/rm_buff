@@ -1,3 +1,6 @@
+// Copyright (C) 2024 Zheng Yu
+// Licensed under the MIT License.
+
 #ifndef BUFF_TRACKER__KALMAN_FILTER_HPP_
 #define BUFF_TRACKER__KALMAN_FILTER_HPP_
 

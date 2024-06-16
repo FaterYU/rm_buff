@@ -1,3 +1,6 @@
+// Copyright (C) 2024 Zheng Yu
+// Licensed under the MIT License.
+
 #include "buff_detector/detector.hpp"
 
 #include <rclcpp/rclcpp.hpp>
@@ -37,7 +40,7 @@ Detector::Detector(const std::string model_path) : model_path_(model_path)
     cv::Point2f(345.0, 131.0)};
 
   double ratio_x = 1.25;
-  double ratio_y = 1.15;
+  double ratio_y = 1.1;
   double move_x = 0.0;
   double move_y = 0.0;
 

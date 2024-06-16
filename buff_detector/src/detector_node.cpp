@@ -1,3 +1,6 @@
+// Copyright (C) 2024 Zheng Yu
+// Licensed under the MIT License.
+
 #include "buff_detector/detector_node.hpp"
 
 namespace rm_buff

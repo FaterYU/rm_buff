@@ -6,13 +6,27 @@ RoboMaster能量机关自动瞄准算法模块
 
 本项目基于 [FaterYU/rm_vision (github.com)](https://github.com/FaterYU/rm_vision) 框架开发，与 [FaterYU/rm_auto_aim (github.com)](https://github.com/FaterYU/rm_auto_aim) 可共存运行，使用 [FaterYU/rm_serial_driver (github.com)](https://github.com/FaterYU/rm_serial_driver) 进行串口通信。
 
-[![License: APACHE-2.0](https://img.shields.io/badge/APACHE-2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
+<img src="docs/rm_vision.svg" alt="rm_vision" width="200" height="200">
+
+该项目为 [rm_vision](https://github.com/FaterYU/rm_vision) 的子模块
+
+若有帮助请Star这个项目
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
+## 文档
+
+[2024EnergyGain](./docs/2024EnergyGain.md)
+
+## 效果演示
+
+TBD
 
 ## 使用指南
 
 ### 使用rm_vision镜像
 
-~~拉取镜像~~ 镜像暂未开源，2024赛季结束后开源
+拉取镜像
 
 ```shell
 docker pull fateryu/rm_vision:lastest
@@ -68,10 +82,6 @@ sudo apt install ros-$ROS_DISTRO-foxglove-bridge
 source ./install/setup.zsh
 ros2 launch foxglove_bridge foxglove_bridge_launch.xml
 ```
-
-## 模块文档
-
-[2024EnergyGain](./docs/2024EnergyGain.md)
 
 ## 项目包结构
 

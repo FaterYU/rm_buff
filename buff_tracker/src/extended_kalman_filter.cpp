@@ -1,3 +1,6 @@
+// Copyright (C) 2024 Zheng Yu
+// Licensed under the MIT License.
+
 #include "buff_tracker/extended_kalman_filter.hpp"
 
 namespace rm_buff

@@ -2,9 +2,9 @@
 
 ## 写在前面
 
-作者对2024赛季的能量机关自动瞄准的研发从2023年11月开始，陆续完成一部分预研，2024年1月基本完成能量机关扇叶识别与小能量机关的跟踪，2024年4月完成大能量机关的跟踪。本项目基于 [FaterYU/rm_vision (github.com)](https://github.com/FaterYU/rm_vision) 框架开发，部分研发思路参考了 [FaterYU/rm_auto_aim (github.com)](https://github.com/FaterYU/rm_auto_aim) 的思路。本模块还有诸多可改进的细节，但苦于战队其他部分进度爆炸，也仅能停滞于此，计划于本赛季结束将本模块开源。能量机关在超级对抗赛的规则下的战略地位越来越重要，开源此项目旨在为新队伍提供一个完整且足够使用的模块，同时也为的能量机关自动瞄准开源领域添砖加瓦 。此外本模块与 [FaterYU/rm_auto_aim (github.com)](https://github.com/FaterYU/rm_auto_aim) 高度适配，对于视觉刚起步的队伍十分合适，也十分容易与 `rm_vision` 其他模块解耦后融入自己战队的视觉框架中。
+作者对2024赛季的能量机关自动瞄准的研发从2023年11月开始，陆续完成一部分预研，2024年1月基本完成能量机关扇叶识别与小能量机关的跟踪，2024年4月完成大能量机关的跟踪。本项目基于 [FaterYU/rm_vision (github.com)](https://github.com/FaterYU/rm_vision) 框架开发，部分研发思路参考了 [FaterYU/rm_auto_aim (github.com)](https://github.com/FaterYU/rm_auto_aim) 的思路。本模块还有诸多可改进的细节，但苦于战队其他部分进度爆炸，也仅能停滞于此，计划于本赛季结束将本模块开源。开源此项目希望能有更多队伍不拘泥于在像素坐标下进行运动跟踪，参考本项目的方案开源对能量机关进行“整符观测跟踪”，同时也希望能为的能量机关自动瞄准开源添砖加瓦 。此外本模块与 [FaterYU/rm_auto_aim (github.com)](https://github.com/FaterYU/rm_auto_aim) 高度适配，同时也易于与 `rm_vision` 其他模块解耦。
 
-由于实现过程存在非常多的考量与细节操作，本文档仅描述整体思路实现，具体实现细节强烈建议阅读本文档后通读源码。
+由于实现过程存在不少个人考量与细节操作，本文档仅描述整体思路实现，具体实现细节建议阅读本文档后通读源码。各部分文档也会陆续完善，同时欢迎提PR补充一起补充完善此项目。
 
 ## 测试环境
 
@@ -91,15 +91,15 @@ TBD
 
 ## 能量机关扇叶识别
 
-使用西交利物浦GMaster战队开源数据集：[YOLO-of-RoboMaster-Keypoints-Detection-2023](https://github.com/zRzRzRzRzRzRzR/YOLO-of-RoboMaster-Keypoints-Detection-2023)，网络结构使用[Pose - Ultralytics YOLOv8 Docs](https://docs.ultralytics.com/tasks/pose/)，具体模型训练调参流程见：[FaterYU/rm_buff at train (github.com)](https://github.com/FaterYU/rm_buff/tree/train)，此外作者仅对模型进行了半精度操作，若对实时性有更大的需求可对其做int8量化
+使用西交利物浦GMaster战队开源数据集：[YOLO-of-RoboMaster-Keypoints-Detection-2023](https://github.com/zRzRzRzRzRzRzR/YOLO-of-RoboMaster-Keypoints-Detection-2023)，网络结构使用[Pose - Ultralytics YOLOv8 Docs](https://docs.ultralytics.com/tasks/pose/)，具体模型训练调参流程见：[FaterYU/rm_buff at train (github.com)](https://github.com/FaterYU/rm_buff/tree/train)，此外作者仅对模型进行了量化，若对实时性有更大的需求可对其做半精度
 
 得到模型后使用 `openvino` 进行推理，为节省环境配置时间，ROS2 humble + Openvino2024 的Docker环境作者已进行预先构建：[fateryu/ros2_humble_openvino general | Docker Hub](https://hub.docker.com/repository/docker/fateryu/ros2_humble_openvino/general)
 
-由于战队自制能量机关的匀光过于抽象，因此在神经网络识别后对ROI进行了部分传统视觉矫正，具体推理与矫正流程参考[buff_detector/src/detetor.cpp](../buff_detector/src/detector.cpp)，在此不过多赘述。
+由于战队自制能量机关的匀光过于抽象以及识别效果没有调教的很好，因此在神经网络识别后对ROI进行了部分传统视觉矫正，具体推理与矫正流程参考[buff_detector/src/detetor.cpp](../buff_detector/src/detector.cpp)，在此不过多赘述。
 
 接着对识别到的扇叶进行PnP解算，得到扇叶的三维坐标：[Perspective-n-Point (PnP) pose computation](https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html)
 
-考虑到能量机关扇叶的四个点在一个平面上，在PnP解算方法上我们选择了 `cv::SOLVEPNP_IPPE` (Method is based on the paper of T. Collins and A. Bartoli. ["Infinitesimal Plane-Based Pose Estimation"](https://link.springer.com/article/10.1007/s11263-014-0725-5). This method requires coplanar object points.)
+考虑到能量机关扇叶的四个点在一个平面上，在PnP解算方法上同样选择 `cv::SOLVEPNP_IPPE` (Method is based on the paper of T. Collins and A. Bartoli. ["Infinitesimal Plane-Based Pose Estimation"](https://link.springer.com/article/10.1007/s11263-014-0725-5). This method requires coplanar object points.)
 
 ## 相机坐标系到odom坐标系的转换
 
@@ -274,24 +274,4 @@ $$
 
 ## 示例效果
 
-### 小能量机关
-
-- **识别效果**
-  TBD
-- **跟踪效果**
-  TBD
-- **转速拟合效果**
-  TBD
-- **实际击打效果**
-  TBD
-
-### 大能量机关
-
-- **识别效果**
-  TBD
-- **跟踪效果**
-  TBD
-- **转速拟合效果**
-  TBD
-- **实际击打效果**
-  [这是什么？开一下(bilibili.com)](https://www.bilibili.com/video/BV1EH4y1P7ih/?share_source=copy_web)
+TBD
